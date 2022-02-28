@@ -1,7 +1,6 @@
 
 SOURCEPY_HOME="${HOME}/.sourcepy"
 
-: ${PYTHON_BIN:=$(which python3)}
 : ${SOURCEPY_LOGS_ENABLED:=false}
 
 
@@ -11,13 +10,15 @@ sourcepy() {
     # Nested functions
     # These are local only so we don't pollute parent script namespace
 
+        PYTHON_BIN=$(which python3)
+
         _log() {
             $SOURCEPY_LOGS_ENABLED || return
             echo >&2 "sourcepy :: $*"
         }
 
         _die() {
-            echo >&2 "$sourcepy: $*"
+            echo >&2 "sourcepy: $*"
             return 1
         }
 
@@ -25,43 +26,62 @@ sourcepy() {
             echo $1 | sed 's@[/ .]@_@g'
         }
 
-        get_hash() {
-            # generate a file hash to use as a stub cache key
-            # try to use available hash algos; fall back on file last mod date
+        hashfn() {
             local hashfn
-            hashfn=$(which sha256sum) || hashfn=$(which sha1sum) || hashfn=$(which md5sum)
-            if [[ -n $hashfn ]]; then
-                echo $($hashfn $1) | awk '{print $1}'
+            hashfn=$(which sha256sum) || hashfn=$(which sha1sum) || hashfn=$(which shasum)
+            $hashfn <<< $1 | awk '{print $1}'
+        }
+
+        abspath() {
+            if [[ $(command -v realpath) ]]; then
+                realpath $1
             else
-                date -r $1 '+%s'
+                echo "$(cd "$(dirname "$1")"; pwd -P)/$(basename "$1")"
             fi
+        }
+
+        get_hash() {
+            local src_hash=$(hashfn $1)
+            local git_hash=$(git --git-dir "${SOURCEPY_HOME}/.git" rev-parse --verify HEAD)
+            local bin_hash=$($hashfn <<< $(which $PYTHON_BIN))
+            local stub_hash="src:${src_hash}::git:${git_hash}::bin:${bin_hash}"
+            echo $stub_hash
         }
 
         has_changed() {
             local module_src=$1
             local stub_home=$2
-
+            _log hashchangedstart
             if [[ ! -f "$stub_home/stub.sh" || ! -f "$stub_home/stub.hash" ]]; then
+                _log filesmissing
                 return 0
             fi
 
             local current_hash=$(get_hash $module_src)
             local last_hash=$(< "$stub_home/stub.hash")
-
             if [[ $current_hash != $last_hash ]]; then
-                echo $current_hash > $stub_hash_path
+                _log hashdifferent
                 return 0
             fi
+            _log nochanges
             return 1
         }
 
         generate_stubs() {
+            _log teststart
             local module_src=$1
             local stub_home=$2
             local module_hash=$(get_hash $module_src)
             _log "generating stubs for $module_src"
+            mkdir -p $stub_home
             echo $module_hash > "${stub_home}/stub.hash"
-            python3 ${SOURCEPY_HOME}/bin/source.py $module_src > "$stub_home/stub.sh"
+            local module_stub
+            module_stub=$($PYTHON_BIN ${SOURCEPY_HOME}/bin/source.py $module_src)
+            if [[ $? -ne 0 ]]; then
+                return 1
+            fi
+            _log testend
+            echo $module_stub > "$stub_home/stub.sh"
         }
 
     ###########################################################
@@ -70,10 +90,9 @@ sourcepy() {
     ##                                                       ##
     ###########################################################
 
-    local module_src=$1
+    local module_src=$(abspath $1)
 
     if [[ -z $module_src ]]; then
-        _log $0 $@
         _die "not enough arguments"
     fi
 

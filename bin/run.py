@@ -1,4 +1,5 @@
 import contextlib
+import inspect
 import pathlib
 import sys
 
@@ -14,16 +15,42 @@ def get_callable(parent, method_str):
     return current
 
 
-def parse_args(raw_args):
+def fn_kwarg_names(fn):
+    params = inspect.signature(fn).parameters.items()
+    kwarg_kinds = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    kwarg_names = [name for name, param in params if param.kind in kwarg_kinds]
+    return kwarg_names
+
+
+def coerce_arg(arg):
+    match result:
+        case 'true' | 'false':
+            if result == 'true':
+                return True
+            return False
+        case _:
+            return arg
+
+
+def parse_args(fn, raw_args):
     args = list()
     kwargs = dict()
     for arg in raw_args:
         if '=' in arg:
             k, v = arg.split('=', 1)
-            kwargs[k] = v
-        else:
-            args.append(arg)
+            if k in fn_kwarg_names(fn):
+                kwargs[k] = v
+                continue
+        args.append(arg)
     return args, kwargs
+
+
+def coerce_result(result):
+    match result:
+        case bool():
+            print(str(result).lower())
+        case _:
+            print(result)
 
 
 
@@ -41,9 +68,9 @@ def run_from_stub(module_path, fn_string, raw_args):
     with redirect_stdout():
         module = import_path(module_path)
         fn = get_callable(module, fn_string)
-        args, kwargs = parse_args(sys.argv[3:])
+        args, kwargs = parse_args(fn, raw_args)
         result = fn(*args, **kwargs)
-    print(result)
+    coerce_result(result)
 
 
 if __name__ == '__main__':

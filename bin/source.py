@@ -7,6 +7,7 @@ import types
 from loader import import_path
 
 
+
 def isprimitive(obj: any) -> bool:
     return type(obj) in (int, float, bool, str)
 
@@ -24,7 +25,9 @@ def make_fn(name, value, runner_name):
     fn_def=textwrap.dedent(f"""
         {name}() {{
             local in
-            read -t 0 in
+            if ! [[ -t 0 ]]; then
+                in=$(cat)
+            fi
             {runner_name} {name} $in $@
         }}
     """)
