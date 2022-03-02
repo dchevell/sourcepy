@@ -2,26 +2,27 @@ import inspect
 import pathlib
 import sys
 import textwrap
-import types
+from types import ModuleType
+from typing import Any, Iterator, Optional, _SpecialForm
 
 from loader import import_path
 
 
 
-def isprimitive(obj: any) -> bool:
+def isprimitive(obj: Any) -> bool:
     return type(obj) in (int, float, bool, str)
 
 
-def iscollection(obj: any) -> bool:
+def iscollection(obj: Any) -> bool:
     return type(obj) in (tuple, list, set, dict)
 
 
-def make_var(name, value):
+def make_var(name: str, value: Any) -> None:
     var_def=f'{name}="{value}"'
-    print(var_def)
+    return var_def
 
 
-def make_fn(name, value, runner_name):
+def make_fn(name: str, runner_name: str) -> None:
     fn_def=textwrap.dedent(f"""
         {name}() {{
             local in
@@ -31,10 +32,10 @@ def make_fn(name, value, runner_name):
             {runner_name} {name} $in $@
         }}
     """)
-    print(fn_def)
+    return fn_def
 
 
-def make_runner(module):
+def make_runner(module: ModuleType):
     runner_name = f'_sourcepy_run_{hash(module)}'
     module_path = module.__file__
     runner = textwrap.dedent(f"""\
@@ -44,28 +45,45 @@ def make_runner(module):
             {sys.executable} $SOURCEPY_HOME/bin/run.py {module_path} $@
         }}
     """)
-    print(runner)
-    return runner_name
+    return runner
+
 
 
 def make_def(obj, runner_name, parent_ns=None):
     for name, value in inspect.getmembers(obj):
-        if name.startswith('__') or isinstance(value, (types.ModuleType, type)):
+        if name.startswith('__') or isinstance(value, (type, ModuleType, _SpecialForm)):
             continue
-
         fullname = f"{parent_ns}.{name}" if parent_ns is not None else name
         if isprimitive(value) and '.' not in fullname:
-            make_var(fullname, value)
+            yield make_var(fullname, value)
         elif callable(value):
-            make_fn(fullname, value, runner_name)
+            yield make_fn(fullname, runner_name)
         else:
-            make_def(value, runner_name, parent_ns=fullname)
+            yield from make_def(value, runner_name, parent_ns=fullname)
+
+
+def get_definitions(obj: Any, parents: Optional[list] = None) -> Iterator[dict]:
+    if parents is None:
+        parents = []
+    for name, value in inspect.getmembers(obj):
+        if name.startswith('__') or isinstance(value, (type, ModuleType, _SpecialForm)):
+            continue
+        if isprimitive(value) or iscollection(value):
+            yield {'type': 'variable', 'name': name, 'value': value, 'parents': parents}
+        elif callable(value):
+            yield {'type': 'function', 'name': name, 'parents': parents}
+        else:
+            yield from get_definitions(value, parents + [name])
 
 
 def build_stub(module_path):
+    stub_contents = []
     module = import_path(module_path)
-    runner_name = make_runner(module)
+    module_hash = f'_sourcepy_run_{hash(module)}'
+    stub_contents.append(make_runner(module))
     make_def(module, runner_name)
+
+
 
 
 if __name__ == '__main__':
