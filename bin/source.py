@@ -1,48 +1,43 @@
 import inspect
-import pathlib
 import sys
 import textwrap
+from collections import namedtuple
+from pathlib import Path
 from types import ModuleType
 from typing import Any, Iterator, Optional, _SpecialForm
 
-from loader import import_path
+from converters import cast_to_shell, isprimitive, iscollection
+from loaders import load_path, get_definitions
 
-
-
-def isprimitive(obj: Any) -> bool:
-    return type(obj) in (int, float, bool, str)
-
-
-def iscollection(obj: Any) -> bool:
-    return type(obj) in (tuple, list, set, dict)
 
 
 def make_var(name: str, value: Any) -> None:
-    var_def=f'{name}="{value}"'
+    value, typedef = cast_to_shell(value)
+    var_def = textwrap.dedent(f"""\
+            declare {('-g ' + typedef).strip()} {name}
+            {name}={value}
+    """)
     return var_def
 
 
-def make_fn(name: str, runner_name: str) -> None:
-    fn_def=textwrap.dedent(f"""
+def make_fn(name: str, runner_name: str, helpdoc: Optional[str] = '') -> str:
+    fn_def = textwrap.dedent(f"""\
         {name}() {{
-            local in
-            if ! [[ -t 0 ]]; then
-                in=$(cat)
-            fi
-            {runner_name} {name} $in $@
+            local helpdoc="{helpdoc or ""}"
+            {runner_name} {name} "$@"
         }}
     """)
     return fn_def
 
 
-def make_runner(module: ModuleType):
-    runner_name = f'_sourcepy_run_{hash(module)}'
-    module_path = module.__file__
+def make_runner(runner_name: str, module_path: Path) -> str:
     runner = textwrap.dedent(f"""\
-        # stub for {module_path}
-
         {runner_name}() {{
-            {sys.executable} $SOURCEPY_HOME/bin/run.py {module_path} $@
+            local in
+            if ! [[ -t 0 ]]; then
+                in=$(cat)
+            fi
+            {sys.executable} $SOURCEPY_HOME/bin/run.py {module_path} "$1" $in "${{@:2}}"
         }}
     """)
     return runner
@@ -62,32 +57,40 @@ def make_def(obj, runner_name, parent_ns=None):
             yield from make_def(value, runner_name, parent_ns=fullname)
 
 
-def get_definitions(obj: Any, parents: Optional[list] = None) -> Iterator[dict]:
-    if parents is None:
-        parents = []
-    for name, value in inspect.getmembers(obj):
-        if name.startswith('__') or isinstance(value, (type, ModuleType, _SpecialForm)):
-            continue
-        if isprimitive(value) or iscollection(value):
-            yield {'type': 'variable', 'name': name, 'value': value, 'parents': parents}
-        elif callable(value):
-            yield {'type': 'function', 'name': name, 'parents': parents}
-        else:
-            yield from get_definitions(value, parents + [name])
 
-
-def build_stub(module_path):
+def build_stub(module_path: Path) -> str:
     stub_contents = []
-    module = import_path(module_path)
-    module_hash = f'_sourcepy_run_{hash(module)}'
-    stub_contents.append(make_runner(module))
-    make_def(module, runner_name)
 
+    module = load_path(module_path)
+    stub_title = f"SourcePy stub for {module.__name__} ({module_path})"
+    stub_contents.append(textwrap.dedent(f"""\
+        ######{"#" * len(stub_title)}######
+        ##### {stub_title} #####
+        ######{"#" * len(stub_title)}######
+    """))
 
+    runner_name = f'_sourcepy_run_{hash(module)}'
+    runner = make_runner(runner_name, module_path)
+    stub_contents.append('# SourcePy runner')
+    stub_contents.append(runner)
 
+    stub_contents.append('\n# Definitions')
+    for d in get_definitions(module):
+        full_name = d['parents'] + [d['name']]
+        full_name = '.'.join(full_name)
+        if d['type'] == 'function':
+            helpdoc = inspect.getdoc(d['value'])
+            fn_def = make_fn(full_name, runner_name, helpdoc)
+            stub_contents.append(fn_def)
+        elif d['type'] == 'variable':
+            var_def = make_var(full_name, d['value'])
+            stub_contents.append(var_def)
+    stub = '\n'.join(stub_contents)
+    return stub
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         sys.exit("sourcepy: not enough arguments")
-    module_path = pathlib.Path(sys.argv[1])
-    build_stub(module_path)
+    module_path = Path(sys.argv[1])
+    stub = build_stub(module_path)
+    print(stub)

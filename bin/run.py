@@ -4,15 +4,16 @@ import pathlib
 import sys
 from typing import Any, Generator
 
-from loader import get_callable, import_path, load_shell_args
+from loaders import get_callable, load_path, load_shell_args, parse_shell_args
 
 
 
 def run_from_stub(module_path: pathlib.Path, fn_string: str, raw_args: list[str]) -> None:
     with redirect_stdout():
-        module = import_path(module_path)
+        module = load_path(module_path)
         fn = get_callable(module, fn_string)
         args, kwargs = load_shell_args(fn, raw_args)
+        #print(args, kwargs)
         result = fn(*args, **kwargs)
     print_result(result)
 
@@ -29,6 +30,8 @@ def redirect_stdout() -> Generator:
 def print_result(result: Any) -> None:
     if isinstance(result, bool):
         print(str(result).lower())
+    elif isinstance(result, Generator):
+        print_result(list(result))
     else:
         print(result)
 

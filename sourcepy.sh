@@ -49,6 +49,7 @@ sourcepy() {
         }
 
         has_changed() {
+            return 0
             local module_src=$1
             local stub_home=$2
             _log hashchangedstart
