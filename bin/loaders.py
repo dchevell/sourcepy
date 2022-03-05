@@ -6,7 +6,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Iterator, Optional, _SpecialForm
+from typing import Any, Iterator, Optional, _SpecialForm, get_origin
 
 from converters import cast_from_shell, isprimitive, iscollection
 
@@ -28,7 +28,7 @@ def get_definitions(obj: Any, parents: Optional[list] = None) -> Iterator[dict]:
     if parents is None:
         parents = []
     for name, value in inspect.getmembers(obj):
-        if name.startswith('__') or isinstance(value, (type, ModuleType, _SpecialForm)):
+        if name.startswith('__') or is_unsourceable(value):
             continue
         if isprimitive(value) or iscollection(value):
             yield {'type': 'variable', 'name': name, 'value': value, 'parents': parents}
@@ -44,3 +44,11 @@ def get_callable(parent: Callable, method_str: str) -> Callable:
     for attr in attr_list:
         current = getattr(current, attr)
     return current
+
+
+def is_unsourceable(obj):
+    return any([
+        isinstance(obj, (type, ModuleType, _SpecialForm)),
+        inspect.isabstract(obj),
+        inspect.isabstract(get_origin(obj)),
+    ])
