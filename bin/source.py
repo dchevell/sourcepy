@@ -1,6 +1,7 @@
 import inspect
 import sys
 import textwrap
+
 from collections import namedtuple
 from pathlib import Path
 from typing import Any, Iterator, Optional
@@ -10,7 +11,7 @@ from loaders import load_path, get_definitions
 
 
 
-def make_var(name: str, value: Any) -> None:
+def make_var(name: str, value: Any) -> str:
     value, typedef = cast_to_shell(value)
     var_def = textwrap.dedent(f"""\
             declare {('-g ' + typedef).strip()} {name}

@@ -39,7 +39,7 @@ def cast_typed_from_shell(value: str, type_hint: typing.Any) -> typing.Any:
     return type_hint(value)
 
 
-def cast_to_shell(value: typing.Any) -> tuple[str, typing.Optional[str]]:
+def cast_to_shell(value: typing.Any) -> tuple[str, str]:
     typedef = ""
     if isinstance(value, bool):
         value = str(value).lower()
