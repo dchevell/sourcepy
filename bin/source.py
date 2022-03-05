@@ -1,75 +1,80 @@
 import inspect
-import pathlib
 import sys
 import textwrap
-import types
 
-from loader import import_path
+from collections import namedtuple
+from pathlib import Path
+from typing import Any, Iterator, Optional
 
-
-
-def isprimitive(obj: any) -> bool:
-    return type(obj) in (int, float, bool, str)
-
-
-def iscollection(obj: any) -> bool:
-    return type(obj) in (tuple, list, set, dict)
+from converters import cast_to_shell, isprimitive, iscollection
+from loaders import load_path, get_definitions
 
 
-def make_var(name, value):
-    var_def=f'{name}="{value}"'
-    print(var_def)
+
+def make_var(name: str, value: Any) -> str:
+    value, typedef = cast_to_shell(value)
+    var_def = textwrap.dedent(f"""\
+            declare {('-g ' + typedef).strip()} {name}
+            {name}={value}
+    """)
+    return var_def
 
 
-def make_fn(name, value, runner_name):
-    fn_def=textwrap.dedent(f"""
+def make_fn(name: str, runner_name: str) -> str:
+    fn_def = textwrap.dedent(f"""\
         {name}() {{
+            {runner_name} {name} "$@"
+        }}
+    """)
+    return fn_def
+
+
+def make_runner(runner_name: str, module_path: Path) -> str:
+    runner = textwrap.dedent(f"""\
+        {runner_name}() {{
             local in
             if ! [[ -t 0 ]]; then
                 in=$(cat)
             fi
-            {runner_name} {name} $in $@
+            {sys.executable} $SOURCEPY_HOME/bin/run.py {module_path} "$1" $in "${{@:2}}"
         }}
     """)
-    print(fn_def)
+    return runner
 
 
-def make_runner(module):
+
+def build_stub(module_path: Path) -> str:
+    stub_contents = []
+
+    module = load_path(module_path)
+    stub_title = f"SourcePy stub for {module.__name__} ({module_path})"
+    stub_contents.append(textwrap.dedent(f"""\
+        ######{"#" * len(stub_title)}######
+        ##### {stub_title} #####
+        ######{"#" * len(stub_title)}######
+    """))
+
     runner_name = f'_sourcepy_run_{hash(module)}'
-    module_path = module.__file__
-    runner = textwrap.dedent(f"""\
-        # stub for {module_path}
+    runner = make_runner(runner_name, module_path)
+    stub_contents.append('# SourcePy runner')
+    stub_contents.append(runner)
 
-        {runner_name}() {{
-            {sys.executable} $SOURCEPY_HOME/bin/run.py {module_path} $@
-        }}
-    """)
-    print(runner)
-    return runner_name
-
-
-def make_def(obj, runner_name, parent_ns=None):
-    for name, value in inspect.getmembers(obj):
-        if name.startswith('__') or isinstance(value, (types.ModuleType, type)):
-            continue
-
-        fullname = f"{parent_ns}.{name}" if parent_ns is not None else name
-        if isprimitive(value) and '.' not in fullname:
-            make_var(fullname, value)
-        elif callable(value):
-            make_fn(fullname, value, runner_name)
-        else:
-            make_def(value, runner_name, parent_ns=fullname)
-
-
-def build_stub(module_path):
-    module = import_path(module_path)
-    runner_name = make_runner(module)
-    make_def(module, runner_name)
-
+    stub_contents.append('\n# Definitions')
+    for d in get_definitions(module):
+        full_name = d['parents'] + [d['name']]
+        full_name = '.'.join(full_name)
+        if d['type'] == 'function':
+            fn_def = make_fn(full_name, runner_name)
+            stub_contents.append(fn_def)
+        elif d['type'] == 'variable':
+            var_def = make_var(full_name, d['value'])
+            stub_contents.append(var_def)
+    stub = '\n'.join(stub_contents)
+    return stub
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         sys.exit("sourcepy: not enough arguments")
-    module_path = pathlib.Path(sys.argv[1])
-    build_stub(module_path)
+    module_path = Path(sys.argv[1])
+    stub = build_stub(module_path)
+    print(stub)

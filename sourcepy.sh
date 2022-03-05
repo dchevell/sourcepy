@@ -1,7 +1,7 @@
 
 SOURCEPY_HOME="${HOME}/.sourcepy"
 
-: ${SOURCEPY_LOGS_ENABLED:=false}
+: ${SOURCEPY_DEBUG:=false}
 
 
 
@@ -13,7 +13,7 @@ sourcepy() {
         PYTHON_BIN=$(which python3)
 
         _log() {
-            $SOURCEPY_LOGS_ENABLED || return
+            $SOURCEPY_DEBUG || return
             echo >&2 "sourcepy :: $*"
         }
 
@@ -49,26 +49,25 @@ sourcepy() {
         }
 
         has_changed() {
+            $SOURCEPY_DEBUG && return 0
             local module_src=$1
             local stub_home=$2
-            _log hashchangedstart
             if [[ ! -f "$stub_home/stub.sh" || ! -f "$stub_home/stub.hash" ]]; then
-                _log filesmissing
+                _log "$0: stub files missing"
                 return 0
             fi
 
             local current_hash=$(get_hash $module_src)
             local last_hash=$(< "$stub_home/stub.hash")
             if [[ $current_hash != $last_hash ]]; then
-                _log hashdifferent
+                _log "$0: stub hash out of date"
                 return 0
             fi
-            _log nochanges
+            _log "$0: no changes found"
             return 1
         }
 
         generate_stubs() {
-            _log teststart
             local module_src=$1
             local stub_home=$2
             local module_hash=$(get_hash $module_src)
@@ -80,7 +79,6 @@ sourcepy() {
             if [[ $? -ne 0 ]]; then
                 return 1
             fi
-            _log testend
             echo $module_stub > "$stub_home/stub.sh"
         }
 
