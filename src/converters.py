@@ -1,20 +1,20 @@
 import inspect
 
 from collections.abc import Callable
-from typing import Any, Iterator, Optional, Union, _SpecialForm, get_args, get_origin
+from typing import Any, Iterator, Optional, Tuple, Union, _SpecialForm, get_args, get_origin
 
 
 
-def uniontypes():
+def uniontypes() -> Tuple:
     try:
-        from types import UnionType # Doesn't exist prior to Python 3.10
+        from types import UnionType # type: ignore[attr-defined] # Python < 3.10
         return (Union, UnionType)
     except ImportError:
         return (Union,)
 
 
 def cast_from_shell(value: str, type_hint: Optional[type] = None, strict_typing: bool = False) -> Any:
-    if type_hint not in (inspect._empty, None):
+    if type_hint not in (Any, inspect._empty, None):
         try:
             return cast_typed_from_shell(value, type_hint)
         except (TypeError, ValueError) as e:
@@ -32,21 +32,26 @@ def cast_typed_from_shell(value: str, type_hint: Any) -> Any:
     if type_hint == bool:
         if value.lower() in ['true', 'false']:
             return value.lower() == 'true'
-        raise ValueError(f'invalid literal for boolean: {value}')
+        raise ValueError(f"invalid literal for boolean: {value}")
+    if type_hint == list:
+        return value.split(' ')
 
-    # handle Unions (including Optionals) by trying each type in turn
-    if get_origin(type_hint) in uniontypes():
+    # Support typing module's generic collection types
+    if origin_type := get_origin(type_hint):
+        return cast_typed_from_shell(value, origin_type)
+
+    # Handle Unions (including Optionals) by trying each type in order.
+    if type_hint in uniontypes():
         for t in get_args(type_hint):
             try:
                 return cast_typed_from_shell(value, t)
             except (TypeError, ValueError):
                 pass
-
     # call all other type constructors directly
     return type_hint(value)
 
 
-def cast_to_shell(value: Any) -> tuple[str, str]:
+def cast_to_shell(value: Any) -> Tuple[str, str]:
     typedef = ""
     if isinstance(value, bool):
         value = str(value).lower()
@@ -76,14 +81,18 @@ def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
     else:
         return None
 
-    def typecaster(value):
+    def typecaster(value: str) -> Any:
         return cast_from_shell(value, type_hint, strict_typing)
 
     typecaster.__name__ = get_type_hint_name(type_hint)
     return typecaster
 
 
-def get_type_hint_name(type_hint):
+def get_type_hint_name(type_hint: type) -> str:
+    if origin_type := get_origin(type_hint):
+        type_hint = origin_type
+    if hasattr(type_hint, '__name__'):
+        return type_hint.__name__
     if get_origin(type_hint) in uniontypes():
         type_hint_names = []
         for t in get_args(type_hint):
@@ -92,10 +101,7 @@ def get_type_hint_name(type_hint):
             name = get_type_hint_name(t)
             type_hint_names.append(name)
         return ' | '.join(type_hint_names)
-    elif hasattr(type_hint, '__name__'):
-        return type_hint.__name__
-    else:
-        return str(type_hint)
+    return str(type_hint)
 
 
 def isprimitive(obj: Any) -> bool:

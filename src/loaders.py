@@ -6,13 +6,13 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Iterator, Optional, _SpecialForm, get_origin
+from typing import Any, Iterator, List, Optional, _SpecialForm, get_origin
 
 from converters import cast_from_shell, isprimitive, iscollection
 
 
 
-def load_path(module_path: Path):
+def load_path(module_path: Path) -> ModuleType:
     module_name = module_path.stem.replace('-', '_')
     spec = importlib.util.spec_from_loader(
         module_name,
@@ -25,7 +25,7 @@ def load_path(module_path: Path):
 
 
 
-def get_definitions(obj: Any, parents: Optional[list] = None) -> Iterator[dict]:
+def get_definitions(obj: Any, parents: Optional[List] = None) -> Iterator[dict]:
     if parents is None:
         parents = []
     for name, value in inspect.getmembers(obj):
@@ -39,15 +39,16 @@ def get_definitions(obj: Any, parents: Optional[list] = None) -> Iterator[dict]:
             yield from get_definitions(value, parents + [name])
 
 
-def get_callable(parent: Callable, method_str: str) -> Callable:
+def get_callable(parent: ModuleType, method_str: str) -> Callable:
     attr_list = method_str.split('.')
     current = parent
     for attr in attr_list:
         current = getattr(current, attr)
+    if not callable(current):
+        raise ValueError(f'{method_str} does not point to a valid callable')
     return current
 
-
-def is_unsourceable(obj):
+def is_unsourceable(obj: Any) -> bool:
     return any([
         isinstance(obj, (type, ModuleType, _SpecialForm)),
         inspect.isabstract(obj),

@@ -3,19 +3,19 @@ import inspect
 import pathlib
 import sys
 
-from typing import Any, Generator
+from typing import Any, Generator, List
 
 from loaders import get_callable, load_path
 from parser import FunctionSignatureParser
 
 
 
-def run_from_stub(module_path: pathlib.Path, fn_string: str, raw_args: list[str]) -> None:
+def run_from_stub(module_path: pathlib.Path, fn_string: str, raw_args: List[str]) -> None:
     with redirect_stdout():
         module = load_path(module_path)
         fn = get_callable(module, fn_string)
         parser = FunctionSignatureParser(fn)
-        args, kwargs = parser.parse_args(raw_args)
+        args, kwargs = parser.parse_fn_args(raw_args)
         result = fn(*args, **kwargs)
     print_result(result)
 
