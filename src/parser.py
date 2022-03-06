@@ -5,7 +5,7 @@ from argparse import Action
 from collections import defaultdict
 from collections.abc import Callable
 from inspect import _ParameterKind as ParameterKind, Parameter
-from typing import Any, DefaultDict
+from typing import Any, DefaultDict, Union
 
 from converters import typecast_factory
 
@@ -17,8 +17,9 @@ KEYWORD_ONLY = ParameterKind.KEYWORD_ONLY
 REQUIRED = 'REQUIRED'
 
 
-KeyedParamDict = DefaultDict[ParameterKind | str, list[Parameter]]
-ArgOptions = dict[str, str | type[Action] | Callable]
+
+KeyedParamDict = DefaultDict[Union[ParameterKind, str], list[Parameter]]
+ArgOptions = dict[str, Union[str, type[Action], Callable]]
 
 
 class FunctionSignatureParser(argparse.ArgumentParser):

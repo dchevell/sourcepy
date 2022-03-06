@@ -12,7 +12,8 @@ from loaders import load_path, get_definitions
 
 
 
-SOURCEPY_HOME = Path(__file__).parent.parent
+SOURCEPY_HOME = Path(os.environ.get('SOURCEPY_HOME', Path.home() / '.sourcepy'))
+SOURCEPY_BIN = Path(__file__).resolve().parent
 
 
 def make_var(name: str, value: Any) -> str:
@@ -36,8 +37,7 @@ def make_fn(name: str, runner_name: str) -> str:
 def make_runner(runner_name: str, module_path: Path) -> str:
     runner = textwrap.dedent(f"""\
         {runner_name}() {{
-            local sourcepy_home={SOURCEPY_HOME}
-            {sys.executable} $sourcepy_home/bin/run.py {module_path} "$@"
+            {sys.executable} {SOURCEPY_BIN}/run.py {module_path} "$@"
         }}
     """)
     return runner
@@ -81,7 +81,7 @@ def build_stub(module_path: Path) -> str:
 
 
 def write_stub_file(stub_contents: str, stub_name: str) -> Path:
-    stub_file = SOURCEPY_HOME / 'stubs' / stub_name / 'stub.sh'
+    stub_file = SOURCEPY_HOME / 'stubs' / stub_name
     stub_file.parent.mkdir(parents=True, exist_ok=True)
     with open(stub_file, 'w') as f:
         f.write(stub_contents)
@@ -93,6 +93,6 @@ if __name__ == '__main__':
         sys.exit("sourcepy: not enough arguments")
     module_path = Path(sys.argv[1]).resolve()
     stub_contents = build_stub(module_path)
-    stub_name = escape(module_path)
+    stub_name = escape(module_path) + '.sh'
     stub_file = write_stub_file(stub_contents, stub_name)
     print(stub_file)

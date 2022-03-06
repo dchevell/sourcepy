@@ -1,12 +1,19 @@
 import inspect
-import typing
 
 from collections.abc import Callable
-from types import UnionType
+from typing import Any, Iterator, Optional, Union, _SpecialForm, get_args, get_origin
 
 
 
-def cast_from_shell(value: str, type_hint: typing.Optional[type] = None, strict_typing: bool = False) -> typing.Any:
+def uniontypes():
+    try:
+        from types import UnionType # Doesn't exist prior to Python 3.10
+        return (Union, UnionType)
+    except ImportError:
+        return (Union,)
+
+
+def cast_from_shell(value: str, type_hint: Optional[type] = None, strict_typing: bool = False) -> Any:
     if type_hint not in (inspect._empty, None):
         try:
             return cast_typed_from_shell(value, type_hint)
@@ -20,16 +27,16 @@ def cast_from_shell(value: str, type_hint: typing.Optional[type] = None, strict_
     return value
 
 
-def cast_typed_from_shell(value: str, type_hint: typing.Any) -> typing.Any:
+def cast_typed_from_shell(value: str, type_hint: Any) -> Any:
     # We can't just call `bool` on a string value, it will always return true
     if type_hint == bool:
         if value.lower() in ['true', 'false']:
             return value.lower() == 'true'
         raise ValueError(f'invalid literal for boolean: {value}')
 
-    # handle Unions (including typing.Optionals) by trying each type in turn
-    if typing.get_origin(type_hint) in (typing.Union, UnionType):
-        for t in typing.get_args(type_hint):
+    # handle Unions (including Optionals) by trying each type in turn
+    if get_origin(type_hint) in uniontypes():
+        for t in get_args(type_hint):
             try:
                 return cast_typed_from_shell(value, t)
             except (TypeError, ValueError):
@@ -39,7 +46,7 @@ def cast_typed_from_shell(value: str, type_hint: typing.Any) -> typing.Any:
     return type_hint(value)
 
 
-def cast_to_shell(value: typing.Any) -> tuple[str, str]:
+def cast_to_shell(value: Any) -> tuple[str, str]:
     typedef = ""
     if isinstance(value, bool):
         value = str(value).lower()
@@ -59,7 +66,7 @@ def cast_to_shell(value: typing.Any) -> tuple[str, str]:
     return value, typedef
 
 
-def typecast_factory(param: inspect.Parameter) -> typing.Optional[Callable]:
+def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
     if param.annotation != inspect._empty:
         type_hint = param.annotation
         strict_typing = True
@@ -77,9 +84,9 @@ def typecast_factory(param: inspect.Parameter) -> typing.Optional[Callable]:
 
 
 def get_type_hint_name(type_hint):
-    if typing.get_origin(type_hint) in (typing.Union, UnionType):
+    if get_origin(type_hint) in uniontypes():
         type_hint_names = []
-        for t in typing.get_args(type_hint):
+        for t in get_args(type_hint):
             if t == type(None):
                 continue
             name = get_type_hint_name(t)
@@ -91,13 +98,13 @@ def get_type_hint_name(type_hint):
         return str(type_hint)
 
 
-def isprimitive(obj: typing.Any) -> bool:
+def isprimitive(obj: Any) -> bool:
     return isinstance(obj, (int, float, bool, str))
 
 
-def iscollection(obj: typing.Any) -> bool:
+def iscollection(obj: Any) -> bool:
     return isinstance(obj, (tuple, list, set, dict))
 
 
-def isarray(obj: typing.Any) -> bool:
+def isarray(obj: Any) -> bool:
     return isinstance(obj, (tuple, list, set))
