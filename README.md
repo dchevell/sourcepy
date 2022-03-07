@@ -5,7 +5,7 @@ and use its functions and variables natively. It uses Python's inspect and impor
 machinery to build shims and can leverage type hints for additional features.
 
 
-```
+```python
 $ cat pagetitle.py
 import lxml.html
 
@@ -16,6 +16,7 @@ def getpagetitle(html, kwarg=None) -> str:
     root = lxml.html.fromstring(html)
     title = root.find('.//title')
     return title.text
+
 $ source pagetitle.py
 $ getpagetitle "<html><title>This is pretty nifty</title></html>"
 This is pretty nifty
@@ -33,7 +34,8 @@ positional or keyword args:
 $ getpagetitle "<html><title>This is pretty nifty</title></html>" --kwarg Hello
 Hello
 This is pretty nifty
-$ TITLE=$(getpagetitle "<html><title>This is pretty nifty</title></html>" --kwarg "I hope print goes to stderr")
+$ TITLE=$(getpagetitle "<html><title>This is pretty nifty</title></html>" \
+    --kwarg "I hope print goes to stderr")
 I hope print goes to stderr
 $ echo $TITLE
 This is pretty nifty
@@ -47,6 +49,10 @@ and also understands positional-only, positional-or-keyword, and keyword-only ar
 to give you the full power and flexibility of your Python functions natively from your
 shell.
 
+## Requirements
+
+Sourcepy requires 3.8+ or greater. It has no external dependencies and relies only on
+importlib & inspect machinery from the standard library.
 
 ## Installation
 
