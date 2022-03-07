@@ -1,13 +1,11 @@
-import inspect
 import os
 import sys
 import textwrap
 
-from collections import namedtuple
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any
 
-from converters import cast_to_shell, isprimitive, iscollection
+from converters import cast_to_shell
 from loaders import load_path, get_definitions
 
 

@@ -1,7 +1,7 @@
 import inspect
 
 from collections.abc import Callable
-from typing import Any, Iterator, Optional, Tuple, Union, _SpecialForm, get_args, get_origin
+from typing import Any, Optional, Tuple, Union, get_args, get_origin
 
 
 

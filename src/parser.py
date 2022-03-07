@@ -13,7 +13,7 @@ try:
 except ImportError:
     BooleanOptionalAction = 'store_true' # type: ignore[misc, assignment] # Python > 3.9
 
-from converters import typecast_factory, cast_from_shell
+from converters import typecast_factory
 
 
 

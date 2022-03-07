@@ -8,7 +8,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Iterator, List, Optional, _SpecialForm, get_origin
 
-from converters import cast_from_shell, isprimitive, iscollection
+from converters import isprimitive, iscollection
 
 
 
