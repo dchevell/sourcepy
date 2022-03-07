@@ -52,7 +52,7 @@ def build_stub(module_path: Path) -> str:
     stub_contents = []
 
     module = load_path(module_path)
-    stub_title = f"SourcePy stub for {module.__name__} ({module_path})"
+    stub_title = f'SourcePy stub for {module.__name__} ({module_path})'
     stub_contents.append(textwrap.dedent(f"""\
         ######{"#" * len(stub_title)}######
         ##### {stub_title} #####

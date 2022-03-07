@@ -52,7 +52,7 @@ def cast_typed_from_shell(value: str, type_hint: Any) -> Any:
 
 
 def cast_to_shell(value: Any) -> Tuple[str, str]:
-    typedef = ""
+    typedef = ''
     if isinstance(value, bool):
         value = str(value).lower()
     elif isinstance(value, int):
@@ -61,11 +61,13 @@ def cast_to_shell(value: Any) -> Tuple[str, str]:
     elif isarray(value):
         shell_array = [cast_to_shell(v)[0] for v in value]
         value = f'({" ".join(shell_array)})'
-        typedef = "-a"
+        typedef = '-a'
     elif isinstance(value, dict):
         shell_array = [f'[{cast_to_shell(k)[0]}]={cast_to_shell(v)[0]}' for k, v in value.items()]
         value = f'({" ".join(shell_array)})'
         typedef = '-A'
+    elif value is None:
+        value = ''
     else:
         value = f'"{value}"'
     return value, typedef
@@ -89,8 +91,6 @@ def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
 
 
 def get_type_hint_name(type_hint: type) -> str:
-    if origin_type := get_origin(type_hint):
-        type_hint = origin_type
     if hasattr(type_hint, '__name__'):
         return type_hint.__name__
     if get_origin(type_hint) in uniontypes():
@@ -101,6 +101,9 @@ def get_type_hint_name(type_hint: type) -> str:
             name = get_type_hint_name(t)
             type_hint_names.append(name)
         return ' | '.join(type_hint_names)
+    else:
+        if origin_type := get_origin(type_hint):
+            type_hint = origin_type
     return str(type_hint)
 
 
