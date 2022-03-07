@@ -36,17 +36,20 @@ def cast_typed_from_shell(value: str, type_hint: Any) -> Any:
     if type_hint == list:
         return value.split(' ')
 
-    # Support typing module's generic collection types
-    if origin_type := get_origin(type_hint):
-        return cast_typed_from_shell(value, origin_type)
+    origin_type = get_origin(type_hint)
 
     # Handle Unions (including Optionals) by trying each type in order.
-    if type_hint in uniontypes():
+    if origin_type in uniontypes():
         for t in get_args(type_hint):
             try:
                 return cast_typed_from_shell(value, t)
             except (TypeError, ValueError):
                 pass
+
+    # Support typing module's generic collection types
+    if origin_type is not None:
+        return get_type_hint_name(origin_type)
+
     # call all other type constructors directly
     return type_hint(value)
 
@@ -91,9 +94,8 @@ def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
 
 
 def get_type_hint_name(type_hint: type) -> str:
-    if hasattr(type_hint, '__name__'):
-        return type_hint.__name__
-    if get_origin(type_hint) in uniontypes():
+    origin_type = get_origin(type_hint)
+    if origin_type in uniontypes():
         type_hint_names = []
         for t in get_args(type_hint):
             if t == type(None):
@@ -101,9 +103,10 @@ def get_type_hint_name(type_hint: type) -> str:
             name = get_type_hint_name(t)
             type_hint_names.append(name)
         return ' | '.join(type_hint_names)
-    else:
-        if origin_type := get_origin(type_hint):
-            type_hint = origin_type
+    if origin_type is not None:
+        return get_type_hint_name(origin_type)
+    if hasattr(type_hint, '__name__'):
+        return type_hint.__name__
     return str(type_hint)
 
 
