@@ -91,9 +91,8 @@ def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
 
 
 def get_type_hint_name(type_hint: type) -> str:
-    if hasattr(type_hint, '__name__'):
-        return type_hint.__name__
-    if get_origin(type_hint) in uniontypes():
+    origin_type = get_origin(type_hint)
+    if origin_type in uniontypes():
         type_hint_names = []
         for t in get_args(type_hint):
             if t == type(None):
@@ -101,9 +100,12 @@ def get_type_hint_name(type_hint: type) -> str:
             name = get_type_hint_name(t)
             type_hint_names.append(name)
         return ' | '.join(type_hint_names)
-    else:
-        if origin_type := get_origin(type_hint):
-            type_hint = origin_type
+    if origin_type is not None:
+        return get_type_hint_name(origin_type)
+    if hasattr(type_hint, '__name__'):
+        print('hasattr', type_hint)
+        return type_hint.__name__
+    print('call str', type_hint)
     return str(type_hint)
 
 
