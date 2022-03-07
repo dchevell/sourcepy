@@ -5,7 +5,7 @@
 # Allow this tool to auto update itself from the github repo. Whilst this option is here
 # if you want it, the securityconscious should consider whether they really want to allow
 # strangers to run arbitrary code without on their systems without vetting it first.
-: ${SOURCEPY_AUTO_UPDATE:=false}
+: ${SOURCEPY_AUTO_UPDATE:=false} # todo - does nothing right now
 
 
 
