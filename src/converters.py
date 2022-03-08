@@ -1,6 +1,8 @@
 import inspect
+import re
 
 from collections.abc import Callable
+from re import Pattern
 from typing import Any, Optional, Tuple, Union, get_args, get_origin
 
 
@@ -35,6 +37,8 @@ def cast_typed_from_shell(value: str, type_hint: Any) -> Any:
         raise ValueError(f"invalid literal for boolean: {value}")
     if type_hint == list:
         return value.split(' ')
+    if type_hint == Pattern:
+        return re.compile(value)
 
     origin_type = get_origin(type_hint)
 
@@ -77,7 +81,7 @@ def cast_to_shell(value: Any) -> Tuple[str, str]:
 
 
 def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
-    if param.annotation != inspect._empty:
+    if param.annotation not in(inspect._empty, Any):
         type_hint = param.annotation
         strict_typing = True
     elif param.default != inspect._empty:

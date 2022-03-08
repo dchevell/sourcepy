@@ -131,7 +131,12 @@ class FunctionSignatureParser(argparse.ArgumentParser):
                     value = cmd_args['_positional_or_kw'].pop(0)
                     typecast = typecast_factory(param)
                     if typecast is not None:
-                        value = typecast(value)
+                        try:
+                            value = typecast(value)
+                        except (ValueError, TypeError):
+                            self.error(
+                                f"argument {param.name}: invalid {typecast.__name__} value: '{value}'"
+                            )
                     kwargs[param.name] = value
                     cmd_args[param.name] = value
                 except IndexError:
