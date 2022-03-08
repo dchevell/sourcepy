@@ -1,3 +1,4 @@
+import json
 import inspect
 import re
 
@@ -35,8 +36,13 @@ def cast_typed_from_shell(value: str, type_hint: Any) -> Any:
         if value.lower() in ['true', 'false']:
             return value.lower() == 'true'
         raise ValueError(f"invalid literal for boolean: {value}")
-    if type_hint == list:
-        return value.split(' ')
+    if type_hint in (dict, list):
+        try:
+            return json.loads(value)
+        except json.decoder.JSONDecodeError:
+            pass
+    if type_hint in (list, tuple):
+        return type_hint(value.split(' '))
     if type_hint == Pattern:
         return re.compile(value)
 
@@ -52,7 +58,7 @@ def cast_typed_from_shell(value: str, type_hint: Any) -> Any:
 
     # Support typing module's generic collection types
     if origin_type is not None:
-        return get_type_hint_name(origin_type)
+        return cast_typed_from_shell(value, origin_type)
 
     # call all other type constructors directly
     return type_hint(value)
