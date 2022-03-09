@@ -20,7 +20,7 @@ def uniontypes() -> Tuple:
         return (Union,)
 
 
-def cast_to_type(value: str, type_hint: Optional[type] = None, strict: bool = False) -> Any:
+def cast_to_type(value: str, type_hint: Optional[type] = None, *, strict: bool = False) -> Any:
     if origin_type := get_origin(type_hint):
         return generics_caster(value, type_hint)
     typecaster = get_typecaster(type_hint) or type_hint
@@ -90,63 +90,72 @@ def unknown_caster(value: str) -> Union[bool, int, str]:
     return value
 
 
-def cast_from_shell(value: str, type_hint: Optional[type] = None, strict_typing: bool = False) -> Any:
-    if type_hint not in (Any, Parameter.empty, None):
-        try:
-            return cast_typed_from_shell(value, type_hint)
-        except (TypeError, ValueError) as e:
-            if strict_typing:
-                raise e
-    if value in ['true', 'false']:
-        return value == 'true'
-    if value.isdecimal():
-        return int(value)
-    return value
-
-
-def cast_typed_from_shell(value: str, type_hint: Any) -> Any:
-    # We can't just call `bool` on a string value, it will always return true
-    if type_hint == bool:
-        if value.lower() in ['true', 'false']:
-            return value.lower() == 'true'
-        raise ValueError(f"invalid literal for boolean: {value}")
-    if type_hint in (dict, list):
-        try:
-            return json.loads(value)
-        except json.decoder.JSONDecodeError:
-            pass
-    if type_hint in (list, tuple):
-        return type_hint(shlex.split(value))
-    if type_hint in (date, datetime, time):
-        if value.isdecimal() and type_hint != time:
-            return type_hint.fromtimestamp(int(value))
-        return type_hint.fromisoformat(value)
-    if type_hint == Pattern:
-        return re.compile(value)
-
+# Unwrap Generic Alias & Union types
+def generics_caster(value: str, type_hint: type) -> Any:
     origin_type = get_origin(type_hint)
+    member_types = get_args(type_hint)
+
+    # Support typing module's generic collection types
+    if member_types == ():
+        return cast_to_type(value, origin_type)
+
 
     # Handle Unions (including Optionals) by trying each type in order.
     if origin_type in uniontypes():
         for t in get_args(type_hint):
             try:
-                return cast_typed_from_shell(value, t)
+                return cast_to_type(value, t, strict=True)
             except (TypeError, ValueError):
                 pass
-
-    member_type_hint = get_args(type_hint)
-
-    # Support typing module's generic collection types
-    if origin_type is not None and member_type_hint == ():
-        return cast_typed_from_shell(value, origin_type)
+        raise ValueError(f"invalid literal for {type_hint}: {value}")
 
     # Handle containers with specified member types
     if origin_type == list:
-        member_type_hint = get_args(type_hint)[0]
-        return [cast_typed_from_shell(v, member_type_hint) for v in shlex.split(value)]
+        member_types = get_args(type_hint)[0]
+        values = shlex.split(value)
+        return [cast_to_type(v, member_types, strict=True) for v in values]
+    if origin_type == tuple:
+        values = shlex.split(value)
+        if len(values) != len(member_types):
+            raise ValueError(f"invalid literal for {type_hint}: {value}")
+        return tuple(
+            (cast_to_type(v, t, strict=True) for v, t in zip(values, member_types))
+        )
+    raise TypeError(f"Unhandled type {type_hint}")
 
-    # call all other type constructors directly
-    return type_hint(value)
+
+def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
+    if param.annotation not in(param.empty, Any):
+        type_hint = param.annotation
+        strict = True
+    elif param.default is not param.empty:
+        type_hint = type(param.default)
+        strict = False
+    else:
+        return None
+
+    def typecaster(value: str) -> Any:
+        return cast_to_type(value, type_hint, strict=True)
+
+    typecaster.__name__ = get_type_hint_name(type_hint)
+    return typecaster
+
+
+def get_type_hint_name(type_hint: type) -> str:
+    origin_type = get_origin(type_hint)
+    if origin_type in uniontypes():
+        type_hint_names = []
+        for t in get_args(type_hint):
+            if t == type(None):
+                continue
+            name = get_type_hint_name(t)
+            type_hint_names.append(name)
+        return ' | '.join(type_hint_names)
+    if origin_type is not None:
+        return get_type_hint_name(origin_type)
+    if hasattr(type_hint, '__name__'):
+        return type_hint.__name__
+    return str(type_hint)
 
 
 def cast_to_shell(value: Any) -> Tuple[str, str]:
@@ -169,40 +178,6 @@ def cast_to_shell(value: Any) -> Tuple[str, str]:
     else:
         value = f'"{value}"'
     return value, typedef
-
-
-def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
-    if param.annotation not in(param.empty, Any):
-        type_hint = param.annotation
-        strict_typing = True
-    elif param.default is not param.empty:
-        type_hint = type(param.default)
-        strict_typing = False
-    else:
-        return None
-
-    def typecaster(value: str) -> Any:
-        return cast_from_shell(value, type_hint, strict_typing)
-
-    typecaster.__name__ = get_type_hint_name(type_hint)
-    return typecaster
-
-
-def get_type_hint_name(type_hint: type) -> str:
-    origin_type = get_origin(type_hint)
-    if origin_type in uniontypes():
-        type_hint_names = []
-        for t in get_args(type_hint):
-            if t == type(None):
-                continue
-            name = get_type_hint_name(t)
-            type_hint_names.append(name)
-        return ' | '.join(type_hint_names)
-    if origin_type is not None:
-        return get_type_hint_name(origin_type)
-    if hasattr(type_hint, '__name__'):
-        return type_hint.__name__
-    return str(type_hint)
 
 
 def isprimitive(obj: Any) -> bool:

@@ -6,12 +6,12 @@ from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple, Union, ge
 
 import pytest
 
-from converters import cast_from_shell, cast_to_type, get_type_hint_name
+from casters import cast_to_type, get_type_hint_name
 
 
 
 @pytest.mark.parametrize(
-    'value, type_hint, strict_typing, expected_value', (
+    'value, type_hint, strict, expected_value', (
     ('1', int, True, 1),
     ('1.1', float, True, 1.1),
     ('1', None, False, 1),
@@ -60,8 +60,8 @@ from converters import cast_from_shell, cast_to_type, get_type_hint_name
     ('["one", {"two": 3, "four": 5}]', List, True, ["one", {"two": 3, "four": 5}]),
 
 ))
-def test_cast_from_shell(value, type_hint, strict_typing, expected_value):
-    result = cast_to_type(value, type_hint, strict_typing)
+def test_cast_from_shell(value, type_hint, strict, expected_value):
+    result = cast_to_type(value, type_hint, strict=strict)
     assert result == expected_value
 
 
