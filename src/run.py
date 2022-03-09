@@ -2,7 +2,7 @@ import contextlib
 import pathlib
 import sys
 
-from typing import Any, Generator, List
+from typing import Any, Generator, Iterator, List
 
 from loaders import get_callable, load_path
 from parser import FunctionSignatureParser
@@ -33,7 +33,7 @@ def print_result(result: Any) -> None:
         return
     if isinstance(result, bool):
         print(str(result).lower())
-    elif isinstance(result, Generator):
+    elif isinstance(result, (Generator, Iterator)):
         for y in result:
             print_result(y)
     else:
@@ -50,4 +50,3 @@ if __name__ == '__main__':
         stdin_arg = sys.stdin.read().rstrip()
         raw_args.insert(0, stdin_arg)
     run_from_stub(module_path, fn_string, raw_args)
-
