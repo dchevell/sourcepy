@@ -21,3 +21,4 @@ build-output/
 .vscode/
 .nebulae/
 stubs/
+.dmypy.json

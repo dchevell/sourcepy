@@ -2,30 +2,23 @@ import json
 import inspect
 import re
 import shlex
+import sys
 
 from collections.abc import Callable
 from datetime import date, datetime, time
 from inspect import Parameter
 from re import Pattern
+if sys.version_info >= (3, 10):
+    from types import UnionType
+else:
+    class UnionType: pass
 from typing import (Any, Callable, Dict, List, Optional, Tuple,
     Union, get_args, get_origin)
 
 
 
-def uniontypes() -> Tuple:
-    try:
-        from types import UnionType # type: ignore[attr-defined] # Python < 3.10
-        return (Union, UnionType)
-    except ImportError:
-        return (Union,)
-
-
 def cast_to_type(value: str, type_hint: Optional[type] = None, *, strict: bool = False) -> Any:
-    if origin_type := get_origin(type_hint):
-        return generics_caster(value, type_hint)
     typecaster = get_typecaster(type_hint) or type_hint
-    if typecaster in (Any, Parameter.empty, None):
-        typecaster = unknown_caster
     try:
         return typecaster(value)
     except (TypeError, ValueError) as e:
@@ -38,14 +31,25 @@ def get_typecaster(type_hint: Any) -> Callable:
     typecast_map = {
         bool: bool_caster,
         dict: dict_caster,
-        list: list_caster,
-        tuple: tuple_caster,
+        list: list_caster_factory(type_hint),
+        tuple: tuple_caster_factory(type_hint),
         date: datetime_caster_factory(type_hint),
         datetime: datetime_caster_factory(type_hint),
-        time: datetime_caster_factory(type_hint),
+        time: time_caster,
         Pattern: pattern_caster,
+        Union: union_caster_factory(type_hint),
+        UnionType: union_caster_factory(type_hint),
     }
-    return typecast_map.get(type_hint)
+
+    typecaster = (
+        typecast_map.get(type_hint) or
+        typecast_map.get(get_origin(type_hint)) or
+        type_hint or # int, float, str don't need special cases
+        unknown_caster # type_hint is Any or None
+    )
+    if callable(typecaster):
+        return typecaster
+    raise TypeError("invalid typecaster return value")
 
 
 def bool_caster(value: str) -> bool:
@@ -58,27 +62,59 @@ def dict_caster(value: str) -> Dict:
     return json.loads(value)
 
 
-def list_caster(value: str) -> List:
-    try:
-        return json.loads(value)
-    except json.decoder.JSONDecodeError:
+def list_caster_factory(type_hint: Union[list, List]) -> Callable:
+    def list_caster(value: str) -> List:
+        try:
+            return json.loads(value)
+        except json.decoder.JSONDecodeError:
+            pass
+        values = shlex.split(value)
+        if member_type := get_args(type_hint):
+            return [cast_to_type(v, member_type[0], strict=True) for v in values]
         return shlex.split(value)
+    return list_caster
 
 
-def tuple_caster(value: str) -> Tuple:
-    return tuple(shlex.split(value))
+def tuple_caster_factory(type_hint: Union[tuple, Tuple]) -> Callable:
+    def tuple_caster(value: str) -> Tuple:
+        values = shlex.split(value)
+        if member_types := get_args(type_hint):
+            if len(values) != len(member_types):
+                if Ellipsis not in member_types:
+                    raise ValueError(f"invalid literal for {type_hint}: {value}")
+                member_types = (member_types[0],) * len(values)
+            return tuple(
+                (cast_to_type(v, t, strict=True) for v, t in zip(values, member_types))
+            )
+        return tuple(values)
+    return tuple_caster
 
 
-def datetime_caster_factory(type_hint: Union[date, datetime, time]) -> Callable:
-    def datetime_caster(value: str) -> type_hint:
-        if value.isdecimal() and type_hint != time:
+def datetime_caster_factory(type_hint: Union[date, datetime]) -> Callable:
+    def datetime_caster(value: str) -> Union[date, datetime]:
+        if value.isdecimal():
             return type_hint.fromtimestamp(int(value))
         return type_hint.fromisoformat(value)
     return datetime_caster
 
 
+def time_caster(value: str) -> time:
+    return time.fromisoformat(value)
+
+
 def pattern_caster(value: str) -> Pattern:
     return re.compile(value)
+
+
+def union_caster_factory(type_hint: Any) -> Callable:
+    def union_caster(value: str) -> Any:
+        for t in get_args(type_hint):
+            try:
+                return cast_to_type(value, t, strict=True)
+            except (TypeError, ValueError):
+                pass
+        raise ValueError(f"invalid literal for {type_hint}: {value}")
+    return union_caster
 
 
 # Untyped coercion - allow casting to bools and ints only
@@ -88,40 +124,6 @@ def unknown_caster(value: str) -> Union[bool, int, str]:
     if value.isdecimal():
         return int(value)
     return value
-
-
-# Unwrap Generic Alias & Union types
-def generics_caster(value: str, type_hint: type) -> Any:
-    origin_type = get_origin(type_hint)
-    member_types = get_args(type_hint)
-
-    # Support typing module's generic collection types
-    if member_types == ():
-        return cast_to_type(value, origin_type)
-
-
-    # Handle Unions (including Optionals) by trying each type in order.
-    if origin_type in uniontypes():
-        for t in get_args(type_hint):
-            try:
-                return cast_to_type(value, t, strict=True)
-            except (TypeError, ValueError):
-                pass
-        raise ValueError(f"invalid literal for {type_hint}: {value}")
-
-    # Handle containers with specified member types
-    if origin_type == list:
-        member_types = get_args(type_hint)[0]
-        values = shlex.split(value)
-        return [cast_to_type(v, member_types, strict=True) for v in values]
-    if origin_type == tuple:
-        values = shlex.split(value)
-        if len(values) != len(member_types):
-            raise ValueError(f"invalid literal for {type_hint}: {value}")
-        return tuple(
-            (cast_to_type(v, t, strict=True) for v, t in zip(values, member_types))
-        )
-    raise TypeError(f"Unhandled type {type_hint}")
 
 
 def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
@@ -143,7 +145,7 @@ def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
 
 def get_type_hint_name(type_hint: type) -> str:
     origin_type = get_origin(type_hint)
-    if origin_type in uniontypes():
+    if origin_type in (Union, UnionType):
         type_hint_names = []
         for t in get_args(type_hint):
             if t == type(None):

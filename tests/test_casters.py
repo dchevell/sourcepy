@@ -30,6 +30,11 @@ from casters import cast_to_type, get_type_hint_name
     # Support inner types for containers
     ('1 2 3', list[int], True, [1, 2, 3]),
     ('false 1 two 3', list[bool | int | str], True, [False, 1, 'two', 3]),
+    ('1', tuple[int], True, (1,)),
+    ('false 1 two 3', tuple[bool, int, str, int], True, (False, 1, 'two', 3)),
+    ('1 2 3', tuple[int, ...], True, (1, 2, 3)),
+    ('1 2 3', tuple[int], True, ValueError),
+    ('1 2 3', tuple[int, int], True, ValueError),
 
 
     # Support Union types, including Optionals
@@ -37,6 +42,7 @@ from casters import cast_to_type, get_type_hint_name
     ('test', Union[int, list], True, ['test']),
     ('1', bool | int, True, 1),
     ('test', Optional[list], True, ['test']),
+    ('1 2 3', Optional[tuple[int, ...]], True, (1, 2, 3)),
 
     # Support native datetime types: date, datetime, time
     ('1646803515', date, True, date.fromtimestamp(1646803515)),
@@ -61,8 +67,12 @@ from casters import cast_to_type, get_type_hint_name
 
 ))
 def test_cast_from_shell(value, type_hint, strict, expected_value):
-    result = cast_to_type(value, type_hint, strict=strict)
-    assert result == expected_value
+    if isinstance(expected_value, type) and issubclass(expected_value, Exception):
+        with pytest.raises(expected_value, match='invalid literal'):
+            cast_to_type(value, type_hint, strict=strict)
+    else:
+        result = cast_to_type(value, type_hint, strict=strict)
+        assert result == expected_value
 
 
 
