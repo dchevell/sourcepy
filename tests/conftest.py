@@ -13,3 +13,4 @@ sys.path.append(str(src_dir))
 def typed_fn():
     def myfn(one: str, two: int, three: bool, four: list):
         return one, two, three, four
+    return myfn

@@ -11,7 +11,7 @@ from casters import cast_to_type, get_type_hint_name
 
 
 @pytest.mark.parametrize(
-    'value, type_hint, strict, expected_value', (
+    'value, type_hint, strict, expected_result', (
     ('1', int, True, 1),
     ('1.1', float, True, 1.1),
     ('1', None, False, 1),
@@ -66,13 +66,13 @@ from casters import cast_to_type, get_type_hint_name
     ('["one", {"two": 3, "four": 5}]', List, True, ["one", {"two": 3, "four": 5}]),
 
 ))
-def test_cast_from_shell(value, type_hint, strict, expected_value):
-    if isinstance(expected_value, type) and issubclass(expected_value, Exception):
-        with pytest.raises(expected_value, match='invalid literal'):
+def test_cast_from_shell(value, type_hint, strict, expected_result):
+    if isinstance(expected_result, type) and issubclass(expected_result, Exception):
+        with pytest.raises(expected_result, match='invalid literal'):
             cast_to_type(value, type_hint, strict=strict)
     else:
         result = cast_to_type(value, type_hint, strict=strict)
-        assert result == expected_value
+        assert result == expected_result
 
 
 

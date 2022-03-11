@@ -1,5 +1,4 @@
 import json
-import inspect
 import re
 import shlex
 import sys
@@ -12,7 +11,7 @@ if sys.version_info >= (3, 10):
     from types import UnionType
 else:
     class UnionType: pass
-from typing import (Any, Callable, Dict, List, Optional, Tuple,
+from typing import (Any, Dict, List, Optional, Tuple,
     Union, get_args, get_origin)
 
 
@@ -126,7 +125,7 @@ def unknown_caster(value: str) -> Union[bool, int, str]:
     return value
 
 
-def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
+def typecast_factory(param: Parameter) -> Optional[Callable]:
     if param.annotation not in(param.empty, Any):
         type_hint = param.annotation
         strict = True
@@ -137,7 +136,7 @@ def typecast_factory(param: inspect.Parameter) -> Optional[Callable]:
         return None
 
     def typecaster(value: str) -> Any:
-        return cast_to_type(value, type_hint, strict=True)
+        return cast_to_type(value, type_hint, strict=strict)
 
     typecaster.__name__ = get_type_hint_name(type_hint)
     return typecaster

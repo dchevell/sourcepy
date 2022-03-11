@@ -64,7 +64,6 @@ class FunctionSignatureParser(argparse.ArgumentParser):
 
     def generate_positional_or_keyword_args(self) -> None:
         group = self.add_argument_group('positional or keyword args')
-        group.add_argument('_positional_or_kw', nargs='*', default=[], help=argparse.SUPPRESS)
         for param in self.param_sig_map[POSITIONAL_OR_KEYWORD]:
             name = '--' + param.name.replace('_', '-')
             options = generate_arg_options(param)
@@ -77,19 +76,20 @@ class FunctionSignatureParser(argparse.ArgumentParser):
             options = generate_arg_options(param)
             group.add_argument(name, **options)
 
-    def parse_fn_args(self, *raw_args: List[str]) -> Tuple[List[Any], Dict[str, Any]]:
-        cmd_args = vars(super().parse_args(*raw_args))
+    def parse_fn_args(self, raw_args: List[str]) -> Tuple[Tuple, Dict[str, Any]]:
+        known_args, unknown_args = super().parse_known_args(raw_args)
+        cmd_args = vars(known_args)
         args = []
         kwargs = {}
         for param in self.param_sig_map[POSITIONAL_ONLY]:
             value = cmd_args[param.name]
             args.append(value)
         for param in self.param_sig_map[POSITIONAL_OR_KEYWORD]:
-            if param.name in cmd_args:
+            if param.name in cmd_args and cmd_args[param.name] is not None:
                 kwargs[param.name] = cmd_args[param.name]
             else:
                 try: # no idea if this is sane
-                    value = cmd_args['_positional_or_kw'].pop(0)
+                    value = unknown_args.pop(0)
                     typecast = typecast_factory(param)
                     if typecast is not None:
                         try:
@@ -98,10 +98,12 @@ class FunctionSignatureParser(argparse.ArgumentParser):
                             self.error(
                                 f"argument {param.name}: invalid {typecast.__name__} value: '{value}'"
                             )
-                    kwargs[param.name] = value
+                    args.append(value)
                     cmd_args[param.name] = value
                 except IndexError:
                     pass
+        if unknown_args:
+            self.error(f"unrecognized arguments: {', '.join(unknown_args)}")
         for param in self.param_sig_map[KEYWORD_ONLY]:
             if param.name in cmd_args:
                 kwargs[param.name] = cmd_args[param.name]
@@ -109,8 +111,7 @@ class FunctionSignatureParser(argparse.ArgumentParser):
         for param in self.param_sig_map[REQUIRED]:
             if param.name not in cmd_args:
                 self.error(f"the following arguments are required: {param.name}")
-
-        return args, kwargs
+        return tuple(args), kwargs
 
 
 def generate_arg_options(param: Parameter) -> Dict[str, Any]:
