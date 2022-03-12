@@ -23,7 +23,6 @@ KEYWORD_ONLY = ParameterKind.KEYWORD_ONLY
 REQUIRED = 'REQUIRED'
 
 
-
 KeyedParamDict = DefaultDict[Union[ParameterKind, str], List[Parameter]]
 ArgOptions = Dict[str, Union[str, Type[Action], Callable, List]]
 
@@ -81,14 +80,18 @@ class FunctionSignatureParser(argparse.ArgumentParser):
         cmd_args = vars(known_args)
         args = []
         kwargs = {}
+
+        # Parser will have already failed if these are missing
         for param in self.param_sig_map[POSITIONAL_ONLY]:
             value = cmd_args[param.name]
             args.append(value)
+
+        # Reconcile which args are kw and which are positional
         for param in self.param_sig_map[POSITIONAL_OR_KEYWORD]:
             if param.name in cmd_args and cmd_args[param.name] is not None:
                 kwargs[param.name] = cmd_args[param.name]
             else:
-                try: # no idea if this is sane
+                try: # No idea if this is sane
                     value = unknown_args.pop(0)
                     typecast = typecast_factory(param)
                     if typecast is not None:
@@ -99,11 +102,14 @@ class FunctionSignatureParser(argparse.ArgumentParser):
                                 f"argument {param.name}: invalid {typecast.__name__} value: '{value}'"
                             )
                     args.append(value)
+                    # Map back to cmd_args for easier REQUIRED checks later
                     cmd_args[param.name] = value
                 except IndexError:
                     pass
+        # Fail if unused positional args remain
         if unknown_args:
             self.error(f"unrecognized arguments: {', '.join(unknown_args)}")
+
         for param in self.param_sig_map[KEYWORD_ONLY]:
             if param.name in cmd_args:
                 kwargs[param.name] = cmd_args[param.name]

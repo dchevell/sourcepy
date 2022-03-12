@@ -1,8 +1,6 @@
 import re
-
-from datetime import date, datetime, time
-from re import Pattern
-from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple, Union, get_args
+import datetime as dt
+import typing as t
 
 import pytest
 
@@ -21,11 +19,11 @@ from casters import cast_to_type, get_type_hint_name
 
     # Support shell lists (space separated values)
     ('one two three', list, True, ['one', 'two', 'three']),
-    ('one two three', List, True, ['one', 'two', 'three']),
+    ('one two three', t.List, True, ['one', 'two', 'three']),
     ('one two three', tuple, True, ('one', 'two', 'three')),
-    ('one two three', Tuple, True, ('one', 'two', 'three')),
+    ('one two three', t.Tuple, True, ('one', 'two', 'three')),
     ('one "two three four" five', list, True, ['one', 'two three four', 'five']),
-    ("one 'two three four' five", List, True, ['one', 'two three four', 'five']),
+    ("one 'two three four' five", t.List, True, ['one', 'two three four', 'five']),
 
     # Support inner types for containers
     ('1 2 3', list[int], True, [1, 2, 3]),
@@ -37,34 +35,35 @@ from casters import cast_to_type, get_type_hint_name
     ('1 2 3', tuple[int, int], True, ValueError),
 
 
-    # Support Union types, including Optionals
-    ('test', Union[int, str], True, 'test'),
-    ('test', Union[int, list], True, ['test']),
+    # Support t.Union types, including Optionals
+    ('test', t.Union[int, str], True, 'test'),
+    ('test', t.Union[int, list], True, ['test']),
     ('1', bool | int, True, 1),
-    ('test', Optional[list], True, ['test']),
-    ('1 2 3', Optional[tuple[int, ...]], True, (1, 2, 3)),
+    ('test', t.Optional[list], True, ['test']),
+    ('1 2 3', t.Optional[tuple[int, ...]], True, (1, 2, 3)),
 
-    # Support native datetime types: date, datetime, time
-    ('1646803515', date, True, date.fromtimestamp(1646803515)),
-    ('2022-03-09', date, True, date.fromisoformat('2022-03-09')),
-    ('1646803515', None, False, 1646803515),
-    ('2022-03-09', None, False, '2022-03-09'),
-    ('1646803515', datetime, True, datetime.fromtimestamp(1646803515)),
-    ('2022-03-09T00:05:23', datetime, True, datetime.fromisoformat('2022-03-09T00:05:23')),
-    ('1646803515', None, False, 1646803515),
-    ('2022-03-09T00:05:23', None, False, '2022-03-09T00:05:23'),
-    ('04:23:01.000384', time, True, time.fromisoformat('04:23:01.000384')),
-    ('04:23:01.000384', None, False, '04:23:01.000384'),
 
-    # Support regex re.Pattern type
-    ('^abc$', Pattern, True, re.compile('^abc$')),
+    # Support regex re.Pattern / typing.Pattern type
+    ('^abc$', t.Pattern, True, re.compile('^abc$')),
+    ('^abc$', re.Pattern, True, re.compile('^abc$')),
 
     # Support json values for dict/list types
     ('{"one": 2, "three": [4, 5]}', dict, True, {"one": 2, "three": [4, 5]}),
-    ('{"one": 2, "three": [4, 5]}', Dict, True, {"one": 2, "three": [4, 5]}),
+    ('{"one": 2, "three": [4, 5]}', t.Dict, True, {"one": 2, "three": [4, 5]}),
     ('["one", {"two": 3, "four": 5}]', list, True, ["one", {"two": 3, "four": 5}]),
-    ('["one", {"two": 3, "four": 5}]', List, True, ["one", {"two": 3, "four": 5}]),
+    ('["one", {"two": 3, "four": 5}]', t.List, True, ["one", {"two": 3, "four": 5}]),
 
+    # Support native dt.datetime types: dt.date, dt.datetime, time
+    ('1646803515', dt.date, True, dt.date.fromtimestamp(1646803515)),
+    ('2022-03-09', dt.date, True, dt.date.fromisoformat('2022-03-09')),
+    ('1646803515', None, False, 1646803515),
+    ('2022-03-09', None, False, '2022-03-09'),
+    ('1646803515', dt.datetime, True, dt.datetime.fromtimestamp(1646803515)),
+    ('2022-03-09T00:05:23', dt.datetime, True, dt.datetime.fromisoformat('2022-03-09T00:05:23')),
+    ('1646803515', None, False, 1646803515),
+    ('2022-03-09T00:05:23', None, False, '2022-03-09T00:05:23'),
+    ('04:23:01.000384', dt.time, True, dt.time.fromisoformat('04:23:01.000384')),
+    ('04:23:01.000384', None, False, '04:23:01.000384'),
 ))
 def test_cast_from_shell(value, type_hint, strict, expected_result):
     if isinstance(expected_result, type) and issubclass(expected_result, Exception):
@@ -85,17 +84,17 @@ def test_cast_from_shell(value, type_hint, strict, expected_result):
         (set,   'set'),         (dict,  'dict'),
 
         # typing module built in generics
-        (Dict,  'dict'),        (List,  'list'),
-        (Set,   'set'),         (Tuple, 'tuple'),
-        (DefaultDict, 'defaultdict'),
+        (t.Dict,  'dict'),        (t.List,  'list'),
+        (t.Set,   'set'),         (t.Tuple, 'tuple'),
+        (t.DefaultDict, 'defaultdict'),
 
         # Union types
-        (Optional[int], 'int'),
-        (Optional[List], 'list'),
+        (t.Optional[int], 'int'),
+        (t.Optional[t.List], 'list'),
         (list | dict, 'list | dict'),
-        (Union[int, str], 'int | str'),
-        (dict | int | List, 'dict | int | list'),
-        (Union[Set, list, DefaultDict], 'set | list | defaultdict'),
+        (t.Union[int, str], 'int | str'),
+        (dict | int | t.List, 'dict | int | list'),
+        (t.Union[t.Set, list, t.DefaultDict], 'set | list | defaultdict'),
 ))
 def test_get_type_hint_name(type_hint, name):
     assert get_type_hint_name(type_hint) == name

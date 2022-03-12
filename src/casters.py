@@ -7,13 +7,13 @@ from collections.abc import Callable
 from datetime import date, datetime, time
 from inspect import Parameter
 from re import Pattern
+from typing import (Any, Dict, List, Optional, Tuple, Type,
+    Union, get_args, get_origin)
+
 if sys.version_info >= (3, 10):
     from types import UnionType
 else:
     class UnionType: pass
-from typing import (Any, Dict, List, Optional, Tuple,
-    Union, get_args, get_origin)
-
 
 
 def cast_to_type(value: str, type_hint: Optional[type] = None, *, strict: bool = False) -> Any:
@@ -34,7 +34,7 @@ def get_typecaster(type_hint: Any) -> Callable:
         tuple: tuple_caster_factory(type_hint),
         date: datetime_caster_factory(type_hint),
         datetime: datetime_caster_factory(type_hint),
-        time: time_caster,
+        time: datetime_caster_factory(type_hint),
         Pattern: pattern_caster,
         Union: union_caster_factory(type_hint),
         UnionType: union_caster_factory(type_hint),
@@ -43,7 +43,7 @@ def get_typecaster(type_hint: Any) -> Callable:
     typecaster = (
         typecast_map.get(type_hint) or
         typecast_map.get(get_origin(type_hint)) or
-        type_hint or # int, float, str don't need special cases
+        type_hint or # int, float, other classes with single-arg constructors
         unknown_caster # type_hint is Any or None
     )
     if callable(typecaster):
@@ -61,7 +61,7 @@ def dict_caster(value: str) -> Dict:
     return json.loads(value)
 
 
-def list_caster_factory(type_hint: Union[list, List]) -> Callable:
+def list_caster_factory(type_hint: Type[List]) -> Callable:
     def list_caster(value: str) -> List:
         try:
             return json.loads(value)
@@ -74,7 +74,7 @@ def list_caster_factory(type_hint: Union[list, List]) -> Callable:
     return list_caster
 
 
-def tuple_caster_factory(type_hint: Union[tuple, Tuple]) -> Callable:
+def tuple_caster_factory(type_hint: Type[Tuple]) -> Callable:
     def tuple_caster(value: str) -> Tuple:
         values = shlex.split(value)
         if member_types := get_args(type_hint):
@@ -89,23 +89,19 @@ def tuple_caster_factory(type_hint: Union[tuple, Tuple]) -> Callable:
     return tuple_caster
 
 
-def datetime_caster_factory(type_hint: Union[date, datetime]) -> Callable:
-    def datetime_caster(value: str) -> Union[date, datetime]:
-        if value.isdecimal():
+def datetime_caster_factory(type_hint: Type[Union[date, datetime, time]]) -> Callable:
+    def datetime_caster(value: str) -> Union[date, datetime, time]:
+        if value.isdecimal() and not issubclass(type_hint, time):
             return type_hint.fromtimestamp(int(value))
         return type_hint.fromisoformat(value)
     return datetime_caster
-
-
-def time_caster(value: str) -> time:
-    return time.fromisoformat(value)
 
 
 def pattern_caster(value: str) -> Pattern:
     return re.compile(value)
 
 
-def union_caster_factory(type_hint: Any) -> Callable:
+def union_caster_factory(type_hint: Type[Union[Any]]) -> Callable:
     def union_caster(value: str) -> Any:
         for t in get_args(type_hint):
             try:
@@ -142,7 +138,7 @@ def typecast_factory(param: Parameter) -> Optional[Callable]:
     return typecaster
 
 
-def get_type_hint_name(type_hint: type) -> str:
+def get_type_hint_name(type_hint: Type) -> str:
     origin_type = get_origin(type_hint)
     if origin_type in (Union, UnionType):
         type_hint_names = []

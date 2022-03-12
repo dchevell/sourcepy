@@ -33,7 +33,7 @@ then
 fi
 
 currentshell() {
-    local shell=$(ps -o comm= -p $$)
+    local shell=$(ps -o comm= -p $$ 2> /dev/null)
     if [[ -n $shell ]]
     then
         echo ${shell//-/}
@@ -50,8 +50,8 @@ currentshell() {
 
 if [[ $(currentshell) == "zsh" ]]
 then
-    SOURCEPY_BIN="$(dirname $0)/src"
+    SOURCEPY_BIN="$(realpath $(dirname $0))/src"
 elif [[ $(currentshell) == "bash" ]]
 then
-    SOURCEPY_BIN="$(dirname $BASH_SOURCE)/src"
+    SOURCEPY_BIN="$(realpath $(dirname $BASH_SOURCE))/src"
 fi
