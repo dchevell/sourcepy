@@ -6,6 +6,7 @@ import sys
 from collections.abc import Callable
 from datetime import date, datetime, time
 from inspect import Parameter
+from io import TextIOWrapper
 from re import Pattern
 from typing import (Any, Dict, List, Optional, Tuple, Type,
     Union, get_args, get_origin)
@@ -36,6 +37,7 @@ def get_typecaster(type_hint: Any) -> Callable:
         datetime: datetime_caster_factory(type_hint),
         time: datetime_caster_factory(type_hint),
         Pattern: pattern_caster,
+        TextIOWrapper: textio_caster,
         Union: union_caster_factory(type_hint),
         UnionType: union_caster_factory(type_hint),
     }
@@ -100,6 +102,15 @@ def datetime_caster_factory(type_hint: Type[Union[date, datetime, time]]) -> Cal
 def pattern_caster(value: str) -> Pattern:
     return re.compile(value)
 
+def textio_caster(value: Union[str, TextIOWrapper]):
+    if isinstance(value, TextIOWrapper):
+        return value.read().rstrip()
+    try:
+        with open(value) as f:
+            return f.read()
+    except FileNotFoundError:
+        raise ValueError(f"no such file or directory: {value}")
+
 
 def union_caster_factory(type_hint: Type[Union[Any]]) -> Callable:
     def union_caster(value: str) -> Any:
@@ -150,6 +161,8 @@ def get_type_hint_name(type_hint: Type) -> str:
         return ' | '.join(type_hint_names)
     if origin_type is not None:
         return get_type_hint_name(origin_type)
+    if type_hint is TextIOWrapper:
+        return 'file / stdin'
     if hasattr(type_hint, '__name__'):
         return type_hint.__name__
     return str(type_hint)

@@ -1,10 +1,12 @@
 import argparse
 import inspect
+import sys
 
 from argparse import Action
 from collections import defaultdict
 from collections.abc import Callable
 from inspect import _ParameterKind as ParameterKind, Parameter
+from io import TextIOWrapper
 from typing import Any, DefaultDict, Dict, List, Union, Tuple, Type
 
 # Fall back on regular boolean action < Python 3.9
@@ -21,6 +23,7 @@ POSITIONAL_ONLY = ParameterKind.POSITIONAL_ONLY
 POSITIONAL_OR_KEYWORD = ParameterKind.POSITIONAL_OR_KEYWORD
 KEYWORD_ONLY = ParameterKind.KEYWORD_ONLY
 REQUIRED = 'REQUIRED'
+STDIN = 'STDIN'
 
 
 KeyedParamDict = DefaultDict[Union[ParameterKind, str], List[Parameter]]
@@ -42,6 +45,9 @@ class FunctionSignatureParser(argparse.ArgumentParser):
             self.param_sig_map[kind].append(param)
             if param.default is param.empty:
                 self.param_sig_map[REQUIRED].append(param)
+            if not self.param_sig_map[STDIN]:
+                if param.kind is TextIOWrapper:
+                    self.param_sig_map[STDIN] = param
         self.generate_args()
 
     def generate_args(self) -> None:
@@ -76,6 +82,15 @@ class FunctionSignatureParser(argparse.ArgumentParser):
             group.add_argument(name, **options)
 
     def parse_fn_args(self, raw_args: List[str]) -> Tuple[Tuple, Dict[str, Any]]:
+        # load stdin to first arg with type TextIOWrapper
+        # or else first positional(only/-or-kw)
+        if not sys.stdin.isatty():
+            if param is self.param_sig_map[STDIN]:
+                options[default] = sys.stdin
+            if not self.param_sig_map[STDIN]:
+                if param.kind in (POSITIONAL_ONLY, POSITIONAL_OR_KEYWORD):
+                    options[default] = sys.stdin
+
         known_args, unknown_args = super().parse_known_args(raw_args)
         cmd_args = vars(known_args)
         args = []
