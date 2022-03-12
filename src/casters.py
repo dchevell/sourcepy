@@ -8,13 +8,14 @@ from datetime import date, datetime, time
 from inspect import Parameter
 from io import TextIOWrapper
 from re import Pattern
-from typing import (Any, Dict, List, Optional, Tuple, Type,
+from typing import (Any, Dict, List, Optional, TextIO, Tuple, Type,
     Union, get_args, get_origin)
 
 if sys.version_info >= (3, 10):
     from types import UnionType
 else:
     class UnionType: pass
+
 
 
 def cast_to_type(value: str, type_hint: Optional[type] = None, *, strict: bool = False) -> Any:
@@ -37,6 +38,7 @@ def get_typecaster(type_hint: Any) -> Callable:
         datetime: datetime_caster_factory(type_hint),
         time: datetime_caster_factory(type_hint),
         Pattern: pattern_caster,
+        TextIO: textio_caster,
         TextIOWrapper: textio_caster,
         Union: union_caster_factory(type_hint),
         UnionType: union_caster_factory(type_hint),
@@ -102,14 +104,15 @@ def datetime_caster_factory(type_hint: Type[Union[date, datetime, time]]) -> Cal
 def pattern_caster(value: str) -> Pattern:
     return re.compile(value)
 
-def textio_caster(value: Union[str, TextIOWrapper]):
-    if isinstance(value, TextIOWrapper):
-        return value.read().rstrip()
+
+# Return an open TextIO stream from a file or stdin
+def textio_caster(value: str) -> TextIO:
+    if not sys.stdin.isatty():
+        return sys.stdin
     try:
-        with open(value) as f:
-            return f.read()
-    except FileNotFoundError:
-        raise ValueError(f"no such file or directory: {value}")
+        return open(value)
+    except FileNotFoundError as e:
+        raise ValueError(f"no such file or directory: {value}") from e
 
 
 def union_caster_factory(type_hint: Type[Union[Any]]) -> Callable:

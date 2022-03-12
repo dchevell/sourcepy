@@ -1,3 +1,4 @@
+import io
 import re
 import datetime as dt
 import typing as t
@@ -64,11 +65,19 @@ from casters import cast_to_type, get_type_hint_name
     ('2022-03-09T00:05:23', None, False, '2022-03-09T00:05:23'),
     ('04:23:01.000384', dt.time, True, dt.time.fromisoformat('04:23:01.000384')),
     ('04:23:01.000384', None, False, '04:23:01.000384'),
+
+    # TextIO stream from file
+    ('/dev/null', t.TextIO, True, io.TextIOWrapper),
+    ('/dev/null', io.TextIOWrapper, True, io.TextIOWrapper),
 ))
-def test_cast_from_shell(value, type_hint, strict, expected_result):
+def test_cast_from_shell(value, type_hint, strict, expected_result, monkeypatch):
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     if isinstance(expected_result, type) and issubclass(expected_result, Exception):
         with pytest.raises(expected_result, match='invalid literal'):
             cast_to_type(value, type_hint, strict=strict)
+    elif isinstance(expected_result, type):
+        result = cast_to_type(value, type_hint, strict=strict)
+        assert type(result) is io.TextIOWrapper
     else:
         result = cast_to_type(value, type_hint, strict=strict)
         assert result == expected_result
