@@ -46,7 +46,4 @@ if __name__ == '__main__':
     module_path = pathlib.Path(sys.argv[1])
     fn_string = sys.argv[2]
     raw_args = sys.argv[3:]
-#     if not sys.stdin.isatty():
-#         stdin_arg = sys.stdin.read().rstrip()
-#         raw_args.insert(0, stdin_arg)
     run_from_stub(module_path, fn_string, raw_args)

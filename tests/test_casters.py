@@ -97,6 +97,10 @@ def test_cast_from_shell(value, type_hint, strict, expected_result, monkeypatch)
         (t.Set,   'set'),         (t.Tuple, 'tuple'),
         (t.DefaultDict, 'defaultdict'),
 
+        # file / stdin
+        (t.TextIO, 'file / stdin'),
+        (io.TextIOWrapper, 'file / stdin'),
+
         # Union types
         (t.Optional[int], 'int'),
         (t.Optional[t.List], 'list'),

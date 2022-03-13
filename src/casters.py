@@ -135,7 +135,7 @@ def unknown_caster(value: str) -> Union[bool, int, str]:
     return value
 
 
-def typecast_factory(param: Parameter) -> Optional[Callable]:
+def typecast_factory(param: Parameter, is_stdin: bool = False) -> Optional[Callable]:
     if param.annotation not in(param.empty, Any):
         type_hint = param.annotation
         strict = True
@@ -145,7 +145,11 @@ def typecast_factory(param: Parameter) -> Optional[Callable]:
     else:
         return None
 
+    implicit_stdin = is_stdin and param.annotation not in (TextIO, TextIOWrapper)
+
     def typecaster(value: str) -> Any:
+        if implicit_stdin:
+            value = sys.stdin.read().rstrip()
         return cast_to_type(value, type_hint, strict=strict)
 
     typecaster.__name__ = get_type_hint_name(type_hint)
@@ -164,7 +168,7 @@ def get_type_hint_name(type_hint: Type) -> str:
         return ' | '.join(type_hint_names)
     if origin_type is not None:
         return get_type_hint_name(origin_type)
-    if type_hint is TextIOWrapper:
+    if type_hint in (TextIO, TextIOWrapper):
         return 'file / stdin'
     if hasattr(type_hint, '__name__'):
         return type_hint.__name__
