@@ -8,9 +8,6 @@
 : ${SOURCEPY_AUTO_UPDATE:=false} # todo - does nothing right now
 
 
-
-SOURCEPY_BIN="$(dirname $0)/src"
-
 sourcepy() {
     local python_bin=${PYTHON_BIN:-$(which python3)}
     local module_stub=$($python_bin ${SOURCEPY_BIN}/source.py $1)
@@ -35,4 +32,26 @@ then
     alias .=source
 fi
 
+currentshell() {
+    local shell=$(ps -o comm= -p $$ 2> /dev/null)
+    if [[ -n $shell ]]
+    then
+        echo ${shell//-/}
+        return
+    fi
+    if [[ -n $ZSH_VERSION ]]
+    then
+        echo "zsh"
+    elif [[ -n $BASH_VERSION ]]
+    then
+        echo "bash"
+    fi
+}
 
+if [[ $(currentshell) == "zsh" ]]
+then
+    SOURCEPY_BIN="$(realpath $(dirname $0))/src"
+elif [[ $(currentshell) == "bash" ]]
+then
+    SOURCEPY_BIN="$(realpath $(dirname $BASH_SOURCE))/src"
+fi
