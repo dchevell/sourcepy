@@ -18,8 +18,10 @@ def load_path(module_path: Path) -> ModuleType:
         module_name,
         importlib.machinery.SourceFileLoader(module_name, str(module_path))
     )
-    module = importlib.util.module_from_spec(spec) # type: ignore[arg-type] # spec_from_loader could be None only if loader was not supplied
-    spec.loader.exec_module(module) # type: ignore [union-attr] # results from above implied Optional[ModuleSpec]
+    # spec_from_loader could be None only if loader was not supplied
+    module = importlib.util.module_from_spec(spec) # type: ignore[arg-type]
+    # results from above implied Optional[ModuleSpec]
+    spec.loader.exec_module(module) # type: ignore [union-attr]
     sys.modules[module_name] = module
     return module
 

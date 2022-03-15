@@ -3,10 +3,10 @@ import inspect
 import sys
 
 from argparse import Action
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from inspect import _ParameterKind as ParameterKind, Parameter
 from io import TextIOWrapper
-from typing import Any, Dict, List, Union, TextIO, Tuple, Type
+from typing import Any, Dict, List, Literal, Union, TextIO, Tuple, Type, get_args, get_origin
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -21,7 +21,7 @@ from casters import typecast_factory
 STDIN = '==STDIN==' # placeholder for stdin
 
 
-ArgOptions = Dict[str, Union[str, Type[Action], Callable, List]]
+ArgOptions = Dict[str, Union[str, Type[Action], Callable, Collection]]
 
 
 class FunctionSignatureParser(argparse.ArgumentParser):
@@ -79,8 +79,12 @@ class FunctionSignatureParser(argparse.ArgumentParser):
         is_stdin = param is self.params.stdin_target
         if is_stdin:
              # We use this placeholder rather than sys.stdin so we can choose whether
-             # to return the open handle or resolve the content implicitly
+             # to return an open handle or resolve its content implicitly
             options['default'] = STDIN
+        # work around https://bugs.python.org/issue46080
+        elif set(sys.argv).isdisjoint({'-h', '--help'}):
+            options['default'] = argparse.SUPPRESS
+
         typecast = typecast_factory(param, is_stdin)
         if typecast is not None:
             helptext.append(typecast.__name__)
@@ -97,16 +101,14 @@ class FunctionSignatureParser(argparse.ArgumentParser):
         elif typecast is not None and options.get('type') is None:
             options['type'] = typecast
 
+        if get_origin(param.annotation) is Literal:
+            options['choices'] = get_args(param.annotation)
+
         if param.default is not param.empty:
             helptext.append(f'(default: {param.default})')
         else:
             helptext.append('(required)')
 
-        if (
-            options.get('action') != BooleanOptionalAction
-            and options.get('default') is None
-        ):
-            options['default'] = argparse.SUPPRESS
 
         if options.get('action') == BooleanOptionalAction:
             pass # Don't set metavar for bools
@@ -119,89 +121,73 @@ class FunctionSignatureParser(argparse.ArgumentParser):
         options['help'] = ' '.join(helptext)
         return options
 
-    def parse_pos_only_args(self, parsed_args: Dict) -> List:
-        args: List = []
-        for param in self.params.pos_only:
-            value = parsed_args[param.name]
-            if param is self.params.stdin_target:
-                # Put pos only stdin arg back where it belongs
-                target_index = self.params.pos_only.index(param)
-                args.insert(target_index, value)
-            else:
-                args.append(value)
-        return args
+    def make_raw_arg(self, param: Parameter, value: str) -> List[str]:
+        # Inspect options args (self._action_groups[1]) to determine type & flag name
+        [target] = [a for a in self._action_groups[1]._actions if a.dest == param.name]
+        names: List = list(target.option_strings)
+        # Don't use isinstance, we've replaced BooleanOptionalAction with str < 3.9
+        if type(target) in (BooleanOptionalAction, argparse._StoreTrueAction):
+            valid = ['true', 'false']
+            arg_key = dict(zip(valid, names))
+            try:
+                arg = arg_key[value]
+                return [arg]
+            except KeyError:
+                self.error(f"argument {param.name}: invalid choice: {value} "
+                           f"(choose from {', '.join(valid + names)})")
+        name = names[0]
+        return [name, value]
 
-    def parse_kw_only_args(self, parsed_args: Dict) -> Dict[str, Any]:
-        kwargs: Dict[str, Any] = {}
-
-        for param in self.params.kw_only:
-            if param.name in parsed_args:
-                kwargs[param.name] = parsed_args[param.name]
-        return kwargs
-
-    def parse_pos_or_kw_args(self, parsed: Dict, unknown: List) -> Tuple[Dict[str, Any], List]:
-        kwargs: Dict[str, Any] = {}
-
-        # Reconcile pos-or-kw
-        remaining_params = []
+    def parse_ambiguous_args(self, raw_args: List[str]) -> Dict[str, Any]:
+        known, unknown = self.parse_known_args(raw_args)
+        # pos_or_kw args passed as positional args will likely end up in "unknown"
+        # We determine what they are here, then re-parse those args in order to
+        # re-run argparse's built in type casting & error checking
+        remaining = []
         for param in self.params.pos_or_kw:
-            if param.name in parsed and parsed[param.name] is not None:
-                kwargs[param.name] = parsed[param.name]
-            else:
-                # the rest are implicit positional args
-                remaining_params.append(param)
-
-        for param in remaining_params:
+            if hasattr(known, param.name):
+                continue
             try:
                 value = unknown.pop(0)
             except IndexError:
                 break
-            is_stdin = param is self.params.stdin_target
-            typecast = typecast_factory(param, is_stdin)
-            if typecast is not None:
-                try:
-                    value = typecast(value)
-                except (ValueError, TypeError):
-                    self.error(
-                        f"argument {param.name}: "
-                        f"invalid {typecast.__name__} value: '{value}'"
-                    )
-            kwargs[param.name] = value
-        return kwargs, unknown
-
+            arg = self.make_raw_arg(param, value)
+            remaining.extend(arg)
+        # if more values exist, too many args were supplied
+        if unknown:
+            self.error(f"unrecognised arguments: {' '.join(unknown)}")
+        raw_args.extend(remaining)
+        # reparse to complete populating the `known` Namespace
+        self.parse_known_args(raw_args, namespace=known)
+        return vars(known)
 
     def parse_fn_args(self, raw_args: List[str]) -> Tuple[Tuple, Dict[str, Any]]:
-        known, unknown = super().parse_known_args(raw_args)
-        parsed = vars(known)
-
-        args: List = []
-        kwargs: Dict[str, Any] = {}
-
-        pos_only = self.parse_pos_only_args(parsed)
-        args.extend(pos_only)
-
-        kw_only = self.parse_kw_only_args(parsed)
-        kwargs.update(kw_only)
-
-        pos_or_kw, unknown = self.parse_pos_or_kw_args(parsed, unknown)
-        kwargs.update(pos_or_kw)
-        # Map back to parsed for easier REQUIRED checks later
-        parsed.update(pos_or_kw)
-
-        # Fail if unused positional args remain
-        if unknown:
-            self.error(f"unrecognized arguments: {', '.join(unknown)}")
-
+        parsed = self.parse_ambiguous_args(raw_args)
         for param in self.params.required:
             if param.name not in parsed:
                 self.error(f"the following arguments are required: {param.name}")
+
+        args: List = []
+        kwargs: Dict[str, Any] = {}
+        for param in self.params.all:
+            if param.name not in parsed:
+                continue
+            value = parsed[param.name]
+            if param not in self.params.pos_only:
+                kwargs[param.name] = value
+            elif param is self.params.stdin_target:
+                    # Put pos only stdin arg back where it belongs
+                target_index = self.params.pos_only.index(param)
+                args.insert(target_index, value)
+            else:
+                args.append(value)
+
         return tuple(args), kwargs
 
 
 class ParamSigMap:
     def __init__(self, fn: Callable) -> None:
         self._param_signatures = inspect.signature(fn).parameters
-
         self.all = []
         self.pos_only = []
         self.pos_or_kw = []
@@ -224,7 +210,6 @@ class ParamSigMap:
                 and sys.stdin.isatty() is False
             ):
                 self.stdin_target = param
-
         # If no param has claimed TextIO stream data
         # and there are non-kw-only params, assign
         # the first one to be implicit stdin

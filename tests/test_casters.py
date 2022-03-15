@@ -12,7 +12,7 @@ from casters import cast_to_type, get_type_hint_name
 @pytest.mark.parametrize(
     'value, type_hint, strict, expected_result', (
     ('1', int, True, 1),
-    ('1.1', float, True, 1.1),
+    ('1.0', float, True, 1.0),
     ('1', None, False, 1),
     ('true', bool, True, True),
     ('false', bool, False, False),
@@ -39,10 +39,23 @@ from casters import cast_to_type, get_type_hint_name
     # Support t.Union types, including Optionals
     ('test', t.Union[int, str], True, 'test'),
     ('test', t.Union[int, list], True, ['test']),
+    ('1.0', t.Union[int, float], True, 1.0),
+    ('1.0', t.Union[float, int], True, 1.0),
+    ('1', t.Union[int, float], True, 1),
+    ('1', t.Union[float, int], True, 1),
+    ('1.0', int | float, True, 1.0),
+    ('1', float | int, True, 1),
     ('1', bool | int, True, 1),
     ('test', t.Optional[list], True, ['test']),
     ('1 2 3', t.Optional[tuple[int, ...]], True, (1, 2, 3)),
 
+    # Support literals
+    ('1', t.Literal['2', 1], True, 1),
+    ('1', t.Literal['2', '1', 1], True, '1'),
+    ('get', t.Literal['get', 'set', 'has'], True, 'get'),
+    ('del', t.Literal['get', 'set', 'has'], True, ValueError),
+    ('false', t.Literal[True, False], True, False),
+    ('1.1', t.Literal[1, 1.1, '1.1'], True, 1.1),
 
     # Support regex re.Pattern / typing.Pattern type
     ('^abc$', t.Pattern, True, re.compile('^abc$')),
@@ -70,7 +83,7 @@ from casters import cast_to_type, get_type_hint_name
     ('/dev/null', t.TextIO, True, io.TextIOWrapper),
     ('/dev/null', io.TextIOWrapper, True, io.TextIOWrapper),
 ))
-def test_cast_from_shell(value, type_hint, strict, expected_result, monkeypatch):
+def test_cast_from_shell(monkeypatch, value, type_hint, strict, expected_result):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     if isinstance(expected_result, type) and issubclass(expected_result, Exception):
         with pytest.raises(expected_result, match='invalid literal'):
@@ -81,6 +94,7 @@ def test_cast_from_shell(value, type_hint, strict, expected_result, monkeypatch)
     else:
         result = cast_to_type(value, type_hint, strict=strict)
         assert result == expected_result
+        assert type(result) is type(expected_result)
 
 
 

@@ -8,7 +8,7 @@ from datetime import date, datetime, time
 from inspect import Parameter
 from io import TextIOWrapper
 from re import Pattern
-from typing import (Any, Dict, List, Optional, TextIO, Tuple, Type,
+from typing import (Any, Dict, List, Literal, Optional, TextIO, Tuple, Type,
     Union, get_args, get_origin)
 
 if sys.version_info >= (3, 10):
@@ -42,6 +42,7 @@ def get_typecaster(type_hint: Any) -> Callable:
         TextIOWrapper: textio_caster,
         Union: union_caster_factory(type_hint),
         UnionType: union_caster_factory(type_hint),
+        Literal: literal_caster_factory(type_hint),
     }
 
     typecaster = (
@@ -110,20 +111,41 @@ def textio_caster(value: str) -> TextIO:
     if not sys.stdin.isatty():
         return sys.stdin
     try:
-        return open(value)
+        file = open(value)
+        return file
     except FileNotFoundError as e:
         raise ValueError(f"no such file or directory: {value}") from e
 
 
 def union_caster_factory(type_hint: Type[Union[Any]]) -> Callable:
     def union_caster(value: str) -> Any:
-        for t in get_args(type_hint):
+        types = get_args(type_hint)
+        for t in types:
             try:
-                return cast_to_type(value, t, strict=True)
+                typed_value = cast_to_type(value, t, strict=True)
             except (TypeError, ValueError):
-                pass
+                continue
+            # prevent float matching ints if both in Union
+            if set(types).issuperset({int, float}):
+                if value != str(typed_value):
+                    continue
+            return typed_value
         raise ValueError(f"invalid literal for {type_hint}: {value}")
     return union_caster
+
+
+def literal_caster_factory(type_hint: Type) -> Callable:
+    def literal_caster(value: str) -> Any:
+        choices = get_args(type_hint)
+        for c in choices:
+            try:
+                choice = cast_to_type(value, type(c), strict=True)
+            except (TypeError, ValueError):
+                continue
+            if choice in choices:
+                return choice
+        raise ValueError(f"invalid literal for {type_hint}: {value}")
+    return literal_caster
 
 
 # Untyped coercion - allow casting to bools and ints only
@@ -145,11 +167,15 @@ def typecast_factory(param: Parameter, is_stdin: bool = False) -> Optional[Calla
     else:
         return None
 
-    implicit_stdin = is_stdin and param.annotation not in (TextIO, TextIOWrapper)
+    # if implicit stdin, read the value inside closure so we can
+    # call it multiple times without getting an empty buffer
+    implicit_stdin = None
+    if is_stdin and param.annotation not in (TextIO, TextIOWrapper):
+        implicit_stdin = sys.stdin.read().rstrip()
 
     def typecaster(value: str) -> Any:
-        if implicit_stdin:
-            value = sys.stdin.read().rstrip()
+        if implicit_stdin is not None:
+            value = implicit_stdin
         return cast_to_type(value, type_hint, strict=strict)
 
     typecaster.__name__ = get_type_hint_name(type_hint)
@@ -166,6 +192,8 @@ def get_type_hint_name(type_hint: Type) -> str:
             name = get_type_hint_name(t)
             type_hint_names.append(name)
         return ' | '.join(type_hint_names)
+    if origin_type is Literal:
+        return str(get_args(type_hint))[1:-1]
     if origin_type is not None:
         return get_type_hint_name(origin_type)
     if type_hint in (TextIO, TextIOWrapper):
