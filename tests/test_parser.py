@@ -3,7 +3,7 @@ from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple, Union
 
 import pytest
 
-from parser import FunctionSignatureParser
+from parsers import FunctionSignatureParser
 
 @pytest.mark.parametrize(
     'cmd_args, expected_result', (

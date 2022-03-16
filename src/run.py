@@ -5,7 +5,7 @@ import sys
 from typing import Any, Generator, Iterator, List
 
 from loaders import get_callable, load_path
-from parser import FunctionSignatureParser
+from parsers import FunctionSignatureParser
 
 
 

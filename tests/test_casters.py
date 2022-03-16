@@ -5,7 +5,7 @@ import typing as t
 
 import pytest
 
-from casters import cast_to_type, get_type_hint_name
+from casters import cast_to_type, get_typehint_name
 
 
 
@@ -123,5 +123,5 @@ def test_cast_from_shell(monkeypatch, value, type_hint, strict, expected_result)
         (dict | int | t.List, 'dict | int | list'),
         (t.Union[t.Set, list, t.DefaultDict], 'set | list | defaultdict'),
 ))
-def test_get_type_hint_name(type_hint, name):
-    assert get_type_hint_name(type_hint) == name
+def test_get_typehint_name(type_hint, name):
+    assert get_typehint_name(type_hint) == name

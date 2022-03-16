@@ -26,7 +26,6 @@ def load_path(module_path: Path) -> ModuleType:
     return module
 
 
-
 def get_definitions(obj: Any, parents: Optional[List] = None) -> Iterator[dict]:
     if parents is None:
         parents = []
