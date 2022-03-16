@@ -167,7 +167,7 @@ def typecast_factory(param: Parameter, is_stdin: bool = False) -> Optional[Calla
         typehint = type(param.default)
         strict = False
     else:
-        return None
+        typehint = None
 
     # if implicit stdin, read the value inside closure so we can
     # call it multiple times without getting an empty buffer

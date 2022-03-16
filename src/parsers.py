@@ -74,9 +74,10 @@ class FunctionSignatureParser(argparse.ArgumentParser):
                 options['action'] = action
             options['choices'] = self.options_choices(param)
             options['metavar'] = self.options_metavar(param)
-            if options.get('action') != BooleanOptionalAction:
-                if (option_type := self.options_type(param)) is not None:
-                    options['type'] = option_type
+
+#             if options.get('action') != BooleanOptionalAction:
+#                 if (option_type := self.options_type(param)) is not None:
+#                     options['type'] = option_type
 
             helptext = []
             if option_type := options.get('type'):
@@ -179,6 +180,12 @@ class FunctionSignatureParser(argparse.ArgumentParser):
             if param.name not in parsed:
                 continue
             value = parsed[param.name]
+            if isinstance(value, str):
+                typecast = self.options_type(param)
+                try:
+                    value = typecast(value)
+                except (TypeError, ValueError):
+                    self.error(f"invalid {typecast.__name__} value: {value}")
             if param not in positional_only(self.params):
                 kwargs[param.name] = value
             elif param is stdin_target(self.params):
