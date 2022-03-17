@@ -3,22 +3,26 @@ from typing import Any, DefaultDict, Dict, List, Optional, Set, Tuple, Union
 
 import pytest
 
-from parsers import FunctionSignatureParser
+from parsers import FunctionParameterParser
 
 @pytest.mark.parametrize(
     'cmd_args, expected_result', (
     (['test', '1', 'true', 'a "b c" d'], ((), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b c', 'd']})),
     (['test', '1', '--three', 'a b c'],  ((), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b', 'c']})),
-    (['--four', 'a b c', 'test', '1', '--no-three'], ((), {'one': 'test', 'two': 1, 'three': False, 'four': ['a', 'b', 'c']})),
     (['test', '1', '--no-three'], ((), {'one': 'test', 'two': 1, 'three': False})),
     (['test', '1', 'a b c'], SystemExit),
     (['test', '1', 'true', 'a "b c" d', '1'], SystemExit),
     (['test', '1', '--three', 'true', 'a "b c" d'], SystemExit),
     (['test', 'test', 'test', 'test'], SystemExit),
+
+    # nargs > 1 lists
+    (['test', '1', 'true', 'a', 'b', 'c', 'd'], SystemExit),
+    (['--four', 'a b c', 'test', '1', '--no-three'], SystemExit),
+    (['test', '1', 'true', '--four', 'a', 'b c', 'd'], ((), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b c', 'd']})),
 ))
-def test_parser(typed_fn, cmd_args, expected_result, monkeypatch):
+def test_parser_typed(typed_fn, cmd_args, expected_result, monkeypatch):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
-    parser = FunctionSignatureParser(typed_fn)
+    parser = FunctionParameterParser(typed_fn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
             parser.parse_fn_args(cmd_args)
@@ -30,17 +34,17 @@ def test_parser(typed_fn, cmd_args, expected_result, monkeypatch):
     'cmd_args, expected_result', (
     (['test', '1', 'true', '--four', 'a "b c" d'], (('test', 1), {'three': True, 'four': ['a', 'b c', 'd']})),
     (['test', '1', '--three', '--four', 'a b c'],  (('test', 1), {'three': True, 'four': ['a', 'b', 'c']})),
-    (['--four', 'a b c', 'test', '1', '--no-three'], (('test', 1), {'three': False, 'four': ['a', 'b', 'c']})),
     (['test', '1', '--no-three'], (('test', 1), {'three': False})),
     (['test', '1'], (('test', 1), {})),
     (['test', '1', 'a b c'], SystemExit),
     (['test', '1', 'true', 'a "b c" d', '1'], SystemExit),
     (['test', '1', '--three', 'true', 'a "b c" d'], SystemExit),
     (['test', 'test', 'test', 'test'], SystemExit),
+    (['--four', 'a b c', 'test', '1', '--no-three'], SystemExit),
 ))
 def test_parser_pos_kw(pos_kw_fn, cmd_args, expected_result, monkeypatch):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
-    parser = FunctionSignatureParser(pos_kw_fn)
+    parser = FunctionParameterParser(pos_kw_fn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
             parser.parse_fn_args(cmd_args)
@@ -57,7 +61,7 @@ def test_parser_pos_kw(pos_kw_fn, cmd_args, expected_result, monkeypatch):
 def test_parser_implicit_stdin_str(typed_fn, stdin_arg, cmd_args, expected_result, monkeypatch):
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
     monkeypatch.setattr('sys.stdin.read', stdin_arg.read)
-    parser = FunctionSignatureParser(typed_fn)
+    parser = FunctionParameterParser(typed_fn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
             parser.parse_fn_args(cmd_args)
@@ -74,7 +78,7 @@ def test_parser_implicit_stdin_str(typed_fn, stdin_arg, cmd_args, expected_resul
 def test_parser_implicit_stdin_int(stdin_implicit_int_fn, stdin_arg, cmd_args, expected_result, monkeypatch):
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
     monkeypatch.setattr('sys.stdin.read', stdin_arg.read)
-    parser = FunctionSignatureParser(stdin_implicit_int_fn)
+    parser = FunctionParameterParser(stdin_implicit_int_fn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
             parser.parse_fn_args(cmd_args)
@@ -94,7 +98,7 @@ def test_parser_implicit_stdin_int(stdin_implicit_int_fn, stdin_arg, cmd_args, e
 def test_parser_explicit_stdin_int(stdin_explicit_fn, stdin_arg, cmd_args, expected_result, monkeypatch):
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
     monkeypatch.setattr('sys.stdin.read', stdin_arg.read)
-    parser = FunctionSignatureParser(stdin_explicit_fn)
+    parser = FunctionParameterParser(stdin_explicit_fn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
             parser.parse_fn_args(cmd_args)
@@ -112,7 +116,7 @@ def test_parser_explicit_stdin_int(stdin_explicit_fn, stdin_arg, cmd_args, expec
 def test_parser_pos_kw_implicit_stdin_str(pos_kw_fn, stdin_arg, cmd_args, expected_result, monkeypatch):
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
     monkeypatch.setattr('sys.stdin.read', stdin_arg.read)
-    parser = FunctionSignatureParser(pos_kw_fn)
+    parser = FunctionParameterParser(pos_kw_fn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
             parser.parse_fn_args(cmd_args)

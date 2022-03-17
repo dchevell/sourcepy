@@ -65,19 +65,33 @@ def bool_caster(value: str) -> bool:
 
 
 def dict_caster(value: str) -> Dict:
-    return json.loads(value)
+    json_value = json.loads(value)
+    if not isinstance(json_value, dict):
+        raise ValueError(f"invalid literal for dict: {value}")
+    return json_value
 
 
 def list_caster_factory(typehint: Type[List]) -> Callable:
-    def list_caster(value: str) -> List:
-        try:
-            return json.loads(value)
-        except json.decoder.JSONDecodeError:
-            pass
-        values = shlex.split(value)
+    print('caster0', typehint)
+    def list_caster(value: Union[List, str]) -> List:
+        print('caster1', value, type(value))
+        if len(value) == 1:
+            value = value.pop()
+        print('caster2', value, type(value))
+        if isinstance(value, str):
+            try:
+                json_value = json.loads(value)
+                print('caster3', json_value, type(value))
+                if not isinstance(json_value, list):
+                    raise ValueError(f"invalid literal for {typehint}: {value}")
+                return json_value
+            except json.decoder.JSONDecodeError:
+                pass
+            value = shlex.split(value)
+            print('caster4', value)
         if member_type := get_args(typehint):
-            return [cast_to_type(v, member_type[0], strict=True) for v in values]
-        return shlex.split(value)
+            return [cast_to_type(v, member_type[0], strict=True) for v in value]
+        return value
     return list_caster
 
 
@@ -159,45 +173,20 @@ def unknown_caster(value: str) -> Union[bool, int, str]:
     return value
 
 
-def typecast_factory(param: Parameter, is_stdin: bool = False) -> Optional[Callable]:
-    if param.annotation not in(param.empty, Any):
-        typehint = param.annotation
-        strict = True
-    elif param.default is not param.empty:
-        typehint = type(param.default)
-        strict = False
-    else:
-        typehint = None
-
-    # if implicit stdin, read the value inside closure so we can
-    # call it multiple times without getting an empty buffer
-    implicit_stdin = None
-    if is_stdin and param.annotation not in (TextIO, TextIOWrapper):
-        implicit_stdin = sys.stdin.read().rstrip()
-
-    def typecaster(value: str) -> Any:
-        if implicit_stdin is not None:
-            value = implicit_stdin
-        return cast_to_type(value, typehint, strict=strict)
-
-    typecaster.__name__ = get_typehint_name(typehint)
-    return typecaster
-
-
 def get_typehint_name(typehint: Type) -> str:
-    origin_type = get_origin(typehint)
-    if origin_type in (Union, UnionType):
-        typehint_names = []
+    if isunion(typehint):
+        names = []
         for t in get_args(typehint):
             if t == type(None):
                 continue
             name = get_typehint_name(t)
-            typehint_names.append(name)
-        return ' | '.join(typehint_names)
-    if origin_type is Literal:
+            names.append(name)
+        return ' | '.join(names)
+    origin = get_origin(typehint)
+    if origin is Literal:
         return str(get_args(typehint))[1:-1]
-    if origin_type is not None:
-        return get_typehint_name(origin_type)
+    if origin is not None:
+        return get_typehint_name(origin)
     if typehint in (TextIO, TextIOWrapper):
         return 'file / stdin'
     if hasattr(typehint, '__name__'):
@@ -237,3 +226,15 @@ def iscollection(obj: Any) -> bool:
 
 def isarray(obj: Any) -> bool:
     return isinstance(obj, (tuple, list, set))
+
+def isunion(typehint: Type) -> bool:
+    origin = get_origin(typehint)
+    return origin in (Union, UnionType)
+
+def islist(typehint: Type) -> bool:
+    origin = get_origin(typehint)
+    if list in (typehint, origin):
+        return True
+    if isunion(typehint):
+        return any(islist(a) for a in get_args(typehint))
+    return False

@@ -11,7 +11,7 @@ from typing import (
     TypedDict, Union, get_args, get_origin
 )
 
-from casters import typecast_factory
+from casters import cast_to_type, islist, get_typehint_name
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -29,11 +29,11 @@ class ArgOptions(TypedDict, total=False):
     action: Union[str, Type[Action]]
     choices: Optional[List]
     metavar: str
-    type: Union[Callable[[str], Any], argparse.FileType]
+    nargs: Union[int, str]
     help: str
 
 
-class FunctionSignatureParser(argparse.ArgumentParser):
+class FunctionParameterParser(argparse.ArgumentParser):
 
     def __init__(self, fn: Callable, /, *args: Any, **kwargs: Any) -> None:
         if 'prog' not in kwargs:
@@ -70,24 +70,12 @@ class FunctionSignatureParser(argparse.ArgumentParser):
                 name = '--' + param.name.replace('_', '-')
             options: ArgOptions = {}
             options['default'] = self.options_default(param)
-            if (action := self.options_action(param)) is not None:
-                options['action'] = action
+            options['action'] = self.options_action(param)
             options['choices'] = self.options_choices(param)
             options['metavar'] = self.options_metavar(param)
-
-#             if options.get('action') != BooleanOptionalAction:
-#                 if (option_type := self.options_type(param)) is not None:
-#                     options['type'] = option_type
-
-            helptext = []
-            if option_type := options.get('type'):
-                helptext.append(option_type.__name__)
-            if param.default is not param.empty:
-                helptext.append(f'(default: {param.default})')
-            else:
-                helptext.append('(required)')
-            options['help'] = ' '.join(helptext)
-
+            options['nargs'] = self.options_nargs(param)
+            options['help'] = self.options_help(param)
+            options = {k:v for k,v in options.items() if v is not None}
             group.add_argument(name, **options)
         return group
 
@@ -100,16 +88,14 @@ class FunctionSignatureParser(argparse.ArgumentParser):
         return None
 
     def options_action(self, param: Parameter) -> Optional[Union[str, Type[Action]]]:
-        if bool in (param.annotation, type(param.default)):
-            if param not in positional_only(self.params):
-                return BooleanOptionalAction
+        if isbooleanaction(param) and param not in positional_only(self.params):
+            return BooleanOptionalAction
         return None
 
     def options_choices(self, param: Parameter) -> Optional[List]:
-        if bool in (param.annotation, type(param.default)):
-            if param in positional_only(self.params):
-                choices = ['true', 'false']
-                return choices
+        if isbooleanaction(param) and param in positional_only(self.params):
+            choices = ['true', 'false']
+            return choices
         if get_origin(param.annotation) is Literal:
             choices = list(get_args(param.annotation))
             return choices
@@ -122,10 +108,42 @@ class FunctionSignatureParser(argparse.ArgumentParser):
             return f'/ {param.name}'
         return ''
 
-    def options_type(self, param: Parameter) -> Optional[Callable]:
-        is_stdin = param is stdin_target(self.params)
-        typecast = typecast_factory(param, is_stdin)
-        return typecast
+    def options_nargs(self, param: Parameter) -> Union[int, str]:
+        is_kwarg = param not in positional_only(self.params)
+        if islistarg(param) and is_kwarg:
+            return '*'
+        return None
+
+    def options_help(self, param: Parameter) -> str:
+        helptext = []
+        typehint = get_typehint(param)
+        if typehint:
+            name = get_typehint_name(typehint)
+            helptext.append(name)
+        if param.default is not param.empty:
+            helptext.append(f'(default: {param.default})')
+        else:
+            helptext.append('(required)')
+        return ' '.join(helptext)
+
+    def typecast_factory(self, param: Parameter) -> Optional[Callable]:
+        typehint = get_typehint(param)
+        strict = typehint is param.annotation
+
+        # if implicit stdin, read the value inside closure so we can
+        # call it multiple times without getting an empty buffer
+        implicit_stdin = None
+        if param is stdin_target(self.params) and typehint not in (TextIO, TextIOWrapper):
+            implicit_stdin = sys.stdin.read().rstrip()
+
+        def typecaster(value: str) -> Any:
+            if implicit_stdin is not None:
+                value = implicit_stdin
+            return cast_to_type(value, typehint, strict=strict)
+
+        typecaster.__name__ = get_typehint_name(typehint)
+        return typecaster
+
 
     def make_raw_arg(self, param: Parameter, value: str) -> List[str]:
         # Inspect options args (self._action_groups[1]) to determine type & flag name
@@ -147,25 +165,40 @@ class FunctionSignatureParser(argparse.ArgumentParser):
 
     def parse_ambiguous_args(self, raw_args: List[str]) -> Dict[str, Any]:
         known, unknown = self.parse_known_args(raw_args)
+        print(known, unknown)
         # pos_or_kw args passed as positional args will likely end up in "unknown"
         # We determine what they are here, then re-parse those args in order to
         # re-run argparse's built in type casting & error checking
         remaining = []
+        unused_params = []
+        print(known, unknown)
         for param in positional_or_keyword(self.params):
-            if hasattr(known, param.name):
-                continue
+            if not hasattr(known, param.name):
+                unused_params.append(param)
+        print('unused', unused_params)
+        for param in unused_params:
+            print('unused loop', param)
             try:
                 value = unknown.pop(0)
             except IndexError:
                 break
             arg = self.make_raw_arg(param, value)
             remaining.extend(arg)
+            print('islast', param is unused_params[-1])
+            print('islistarg', islistarg(param))
+            if param is unused_params[-1] and islistarg(param):
+                remaining.extend(unknown)
+                print(param, unknown)
+                print('remain', remaining)
+                unknown.clear()
         # if more values exist, too many args were supplied
+        print(unknown)
         if unknown:
             self.error(f"unrecognised arguments: {' '.join(unknown)}")
         raw_args.extend(remaining)
         # reparse to complete populating the `known` Namespace
         self.parse_known_args(raw_args, namespace=known)
+        print(known)
         return vars(known)
 
     def parse_fn_args(self, raw_args: List[str]) -> Tuple[Tuple, Dict[str, Any]]:
@@ -180,8 +213,8 @@ class FunctionSignatureParser(argparse.ArgumentParser):
             if param.name not in parsed:
                 continue
             value = parsed[param.name]
-            if isinstance(value, str):
-                typecast = self.options_type(param)
+            if isinstance(value, (str, list)):
+                typecast = self.typecast_factory(param)
                 try:
                     value = typecast(value)
                 except (TypeError, ValueError):
@@ -223,3 +256,19 @@ def stdin_target(params: Union[List, ValuesView]) -> Optional[Parameter]:
     if len(params) == len(keyword_only(params)):
         return None
     return next(iter(params))
+
+
+def get_typehint(param: Parameter) -> Type:
+    if param.annotation not in(param.empty, Any):
+        return param.annotation
+    if param.default is not param.empty:
+        return type(param.default)
+    return None
+
+
+def isbooleanaction(param: Parameter) -> bool:
+    return bool in (param.annotation, type(param.default))
+
+def islistarg(param: Parameter) -> bool:
+    typehint = get_typehint(param)
+    return islist(typehint)
