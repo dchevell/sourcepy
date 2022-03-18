@@ -11,7 +11,7 @@ from typing import (
     TypedDict, Union, get_args, get_origin
 )
 
-from casters import cast_to_type, islist, get_typehint_name
+from casters import cast_to_type, islist, istextio, get_typehint_name
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -109,8 +109,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
         return ''
 
     def options_nargs(self, param: Parameter) -> Union[int, str]:
-        is_kwarg = param not in positional_only(self.params)
-        if islistarg(param) and is_kwarg:
+        if islistarg(param) and param not in positional_only(self.params)[:-1]:
             return '*'
         return None
 
@@ -133,7 +132,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
         # if implicit stdin, read the value inside closure so we can
         # call it multiple times without getting an empty buffer
         implicit_stdin = None
-        if param is stdin_target(self.params) and typehint not in (TextIO, TextIOWrapper):
+        if param is stdin_target(self.params) and not istextio(typehint):
             implicit_stdin = sys.stdin.read().rstrip()
 
         def typecaster(value: str) -> Any:
@@ -165,40 +164,30 @@ class FunctionParameterParser(argparse.ArgumentParser):
 
     def parse_ambiguous_args(self, raw_args: List[str]) -> Dict[str, Any]:
         known, unknown = self.parse_known_args(raw_args)
-        print(known, unknown)
         # pos_or_kw args passed as positional args will likely end up in "unknown"
         # We determine what they are here, then re-parse those args in order to
         # re-run argparse's built in type casting & error checking
         remaining = []
         unused_params = []
-        print(known, unknown)
         for param in positional_or_keyword(self.params):
             if not hasattr(known, param.name):
                 unused_params.append(param)
-        print('unused', unused_params)
         for param in unused_params:
-            print('unused loop', param)
             try:
                 value = unknown.pop(0)
             except IndexError:
                 break
             arg = self.make_raw_arg(param, value)
             remaining.extend(arg)
-            print('islast', param is unused_params[-1])
-            print('islistarg', islistarg(param))
             if param is unused_params[-1] and islistarg(param):
                 remaining.extend(unknown)
-                print(param, unknown)
-                print('remain', remaining)
                 unknown.clear()
         # if more values exist, too many args were supplied
-        print(unknown)
         if unknown:
             self.error(f"unrecognised arguments: {' '.join(unknown)}")
         raw_args.extend(remaining)
         # reparse to complete populating the `known` Namespace
         self.parse_known_args(raw_args, namespace=known)
-        print(known)
         return vars(known)
 
     def parse_fn_args(self, raw_args: List[str]) -> Tuple[Tuple, Dict[str, Any]]:
@@ -251,7 +240,7 @@ def stdin_target(params: Union[List, ValuesView]) -> Optional[Parameter]:
     for p in params:
         if sys.stdin.isatty():
             return None
-        if p.annotation in (TextIO, TextIOWrapper):
+        if istextio(p.annotation):
             return p
     if len(params) == len(keyword_only(params)):
         return None

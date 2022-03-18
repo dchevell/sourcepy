@@ -72,23 +72,17 @@ def dict_caster(value: str) -> Dict:
 
 
 def list_caster_factory(typehint: Type[List]) -> Callable:
-    print('caster0', typehint)
     def list_caster(value: Union[List, str]) -> List:
-        print('caster1', value, type(value))
-        if len(value) == 1:
+        if isinstance(value, list) and len(value) == 1:
             value = value.pop()
-        print('caster2', value, type(value))
         if isinstance(value, str):
             try:
                 json_value = json.loads(value)
-                print('caster3', json_value, type(value))
-                if not isinstance(json_value, list):
-                    raise ValueError(f"invalid literal for {typehint}: {value}")
-                return json_value
+                if isinstance(json_value, list):
+                    return json_value
             except json.decoder.JSONDecodeError:
                 pass
             value = shlex.split(value)
-            print('caster4', value)
         if member_type := get_args(typehint):
             return [cast_to_type(v, member_type[0], strict=True) for v in value]
         return value
@@ -227,9 +221,11 @@ def iscollection(obj: Any) -> bool:
 def isarray(obj: Any) -> bool:
     return isinstance(obj, (tuple, list, set))
 
+
 def isunion(typehint: Type) -> bool:
     origin = get_origin(typehint)
     return origin in (Union, UnionType)
+
 
 def islist(typehint: Type) -> bool:
     origin = get_origin(typehint)
@@ -238,3 +234,11 @@ def islist(typehint: Type) -> bool:
     if isunion(typehint):
         return any(islist(a) for a in get_args(typehint))
     return False
+
+
+def istextio(typehint: Type) -> bool:
+    textio_types = {TextIO, TextIOWrapper}
+    if typehint in textio_types:
+        return True
+    type_args = get_args(typehint)
+    return islist(typehint) and len(textio_types.intersection(type_args)) > 0
