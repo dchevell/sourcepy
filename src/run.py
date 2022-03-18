@@ -5,7 +5,7 @@ import sys
 from typing import Any, Generator, Iterator, List
 
 from loaders import get_callable, load_path
-from parsers import FunctionSignatureParser
+from parsers import FunctionParameterParser
 
 
 
@@ -13,7 +13,7 @@ def run_from_stub(module_path: pathlib.Path, fn_string: str, raw_args: List[str]
     with redirect_stdout():
         module = load_path(module_path)
         fn = get_callable(module, fn_string)
-        parser = FunctionSignatureParser(fn)
+        parser = FunctionParameterParser(fn)
         args, kwargs = parser.parse_fn_args(raw_args)
         result = fn(*args, **kwargs)
     print_result(result)
