@@ -25,10 +25,13 @@ else:
 STDIN = '==STDIN==' # placeholder for stdin
 
 # Type aliases
-FunctionParserContextManager = Iterator[Tuple[Tuple, Dict[str, Any]]]
-OptionsAction = Optional[Union[str, Type[Action]]]
-FilePaths = Union[Path, List[Path]]
 FileHandles = Union[TextIO, List[TextIO]]
+FilePaths = Union[Path, List[Path]]
+OptionsAction = Optional[Union[str, Type[Action]]]
+OptionsNargs = Optional[Union[int, str]]
+ParamsList = Union[List[Parameter], ValuesView[Parameter]]
+ParserContextManager = Iterator[Tuple[Tuple, Dict[str, Any]]]
+
 
 class ArgOptions(TypedDict, total=False):
     default: str
@@ -114,10 +117,11 @@ class FunctionParameterParser(argparse.ArgumentParser):
         if param in positional_only(self.params):
             return param.name
         if param in positional_or_keyword(self.params):
+            print(param.name)
             return f'/ {param.name}'
         return ''
 
-    def options_nargs(self, param: Parameter) -> Optional[Union[int, str]]:
+    def options_nargs(self, param: Parameter) -> OptionsNargs:
         if islistarg(param) and param not in positional_only(self.params)[:-1]:
             return '*'
         return None
@@ -136,7 +140,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
         return ' '.join(helptext)
 
     @contextlib.contextmanager
-    def parse_fn_args(self, raw_args: List[str]) -> FunctionParserContextManager:
+    def parse_fn_args(self, raw_args: List[str]) -> ParserContextManager:
         parsed = self.parse_ambiguous_args(raw_args)
         for param in required(self.params):
             if param.name not in parsed:
@@ -197,9 +201,9 @@ class FunctionParameterParser(argparse.ArgumentParser):
 
     def make_raw_arg(self, param: Parameter, value: str) -> List[str]:
         # Inspect options args (self._action_groups[1]) to determine type & flag name
-        action_group = self.groups['positional or keyword']
-        target = next(a for a in action_group._actions if a.dest == param.name)
-        names: List = list(target.option_strings)
+        actions = self.groups['positional or keyword']._actions
+        target = next(a for a in actions if a.dest == param.name)
+        names = list(target.option_strings)
         # Don't use isinstance, we've replaced BooleanOptionalAction with str < 3.9
         if type(target) in (BooleanOptionalAction, StoreTrueAction):
             valid = ['true', 'false']
@@ -226,23 +230,23 @@ class FunctionParameterParser(argparse.ArgumentParser):
         return cast_to_type(value, typehint, strict=strict)
 
 
-def positional_only(params: Union[List, ValuesView]) -> List[Parameter]:
+def positional_only(params: ParamsList) -> List[Parameter]:
     return [p for p in params if p.kind is p.POSITIONAL_ONLY]
 
 
-def positional_or_keyword(params: Union[List, ValuesView]) -> List[Parameter]:
+def positional_or_keyword(params: ParamsList) -> List[Parameter]:
     return [p for p in params if p.kind is p.POSITIONAL_OR_KEYWORD]
 
 
-def keyword_only(params: Union[List, ValuesView]) -> List[Parameter]:
+def keyword_only(params: ParamsList) -> List[Parameter]:
     return [p for p in params if p.kind is p.KEYWORD_ONLY]
 
 
-def required(params: Union[List, ValuesView]) -> List[Parameter]:
+def required(params: ParamsList) -> List[Parameter]:
     return [p for p in params if p.default is p.empty]
 
 
-def stdin_target(params: Union[List, ValuesView]) -> Optional[Parameter]:
+def stdin_target(params: ParamsList) -> Optional[Parameter]:
     for p in params:
         if sys.stdin.isatty():
             return None
