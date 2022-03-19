@@ -8,6 +8,7 @@ bin/preload.sql
 node_modules/
 .ve/
 .cache/
+.*cache/
 __pycache__
 *.swp
 *.egg-info/
@@ -23,3 +24,4 @@ build-output/
 stubs/
 .dmypy.json
 tests/*.xml
+
