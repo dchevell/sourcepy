@@ -81,7 +81,7 @@ def build_stub(module_path: Path) -> str:
 def write_stub_file(stub_contents: str, stub_name: str) -> Path:
     stub_file = SOURCEPY_HOME / 'stubs' / stub_name
     stub_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(stub_file, 'w') as f:
+    with open(stub_file, 'w', encoding='utf-8') as f:
         f.write(stub_contents)
     return stub_file
 

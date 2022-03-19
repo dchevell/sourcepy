@@ -30,9 +30,11 @@ def test_parser_typed(cmd_args, expected_result, monkeypatch):
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
-            parser.parse_fn_args(cmd_args)
+            with parser.parse_fn_args(cmd_args):
+                pass
     else:
-        assert expected_result == parser.parse_fn_args(cmd_args)
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == (args, kwargs)
 
 
 @pytest.mark.parametrize(
@@ -64,9 +66,11 @@ def test_parser_param_kinds(cmd_args, expected_result, monkeypatch):
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
-            parser.parse_fn_args(cmd_args)
+            with parser.parse_fn_args(cmd_args):
+                pass
     else:
-        assert expected_result == parser.parse_fn_args(cmd_args)
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == (args, kwargs)
 
 
 @pytest.mark.parametrize(
@@ -89,9 +93,11 @@ def test_parser_implicit_stdin_str(stdin_arg, cmd_args, expected_result, monkeyp
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
-            parser.parse_fn_args(cmd_args)
+            with parser.parse_fn_args(cmd_args):
+                pass
     else:
-        assert expected_result == parser.parse_fn_args(cmd_args)
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == (args, kwargs)
 
 
 @pytest.mark.parametrize(
@@ -114,9 +120,11 @@ def test_parser_implicit_stdin_int(stdin_arg, cmd_args, expected_result, monkeyp
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
-            parser.parse_fn_args(cmd_args)
+            with parser.parse_fn_args(cmd_args):
+                pass
     else:
-        assert expected_result == parser.parse_fn_args(cmd_args)
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == (args, kwargs)
 
 
 @pytest.mark.parametrize(
@@ -138,10 +146,11 @@ def test_parser_explicit_stdin_int(stdin_arg, cmd_args, expected_result, monkeyp
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
-            parser.parse_fn_args(cmd_args)
+            with parser.parse_fn_args(cmd_args):
+                pass
     else:
-        args, kwargs = parser.parse_fn_args(cmd_args)
-        assert expected_result == myfn(*args, **kwargs)
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == myfn(*args, **kwargs)
 
 
 @pytest.mark.parametrize(
@@ -164,9 +173,11 @@ def test_parser_pos_kw_implicit_stdin_str(stdin_arg, cmd_args, expected_result, 
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
-            parser.parse_fn_args(cmd_args)
+            with parser.parse_fn_args(cmd_args):
+                pass
     else:
-        assert expected_result == parser.parse_fn_args(cmd_args)
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == (args, kwargs)
 
 
 @pytest.mark.parametrize(
@@ -211,9 +222,11 @@ def test_parser_nargs_list(cmd_args, expected_result, monkeypatch):
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
-            parser.parse_fn_args(cmd_args)
+            with parser.parse_fn_args(cmd_args):
+                pass
     else:
-        assert expected_result == parser.parse_fn_args(cmd_args)
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == (args, kwargs)
 
 
 @pytest.mark.parametrize(
@@ -225,7 +238,7 @@ def test_parser_nargs_list(cmd_args, expected_result, monkeypatch):
     ),
 
 ))
-def test_parser_nargs_list(stdin_arg, cmd_args, expected_result, monkeypatch):
+def test_parser_nargs_stdin(stdin_arg, cmd_args, expected_result, monkeypatch):
 
     def myfn(one: str, two: List[TextIO]):
         data = []
@@ -239,7 +252,8 @@ def test_parser_nargs_list(stdin_arg, cmd_args, expected_result, monkeypatch):
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
-            parser.parse_fn_args(cmd_args)
+            with parser.parse_fn_args(cmd_args):
+                pass
     else:
-        args, kwargs = parser.parse_fn_args(cmd_args)
-        assert expected_result == myfn(*args, **kwargs)
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == myfn(*args, **kwargs)
