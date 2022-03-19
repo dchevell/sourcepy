@@ -5,8 +5,8 @@ import sys
 
 from collections.abc import Callable
 from datetime import date, datetime, time
-from inspect import Parameter
 from io import TextIOWrapper
+from pathlib import Path
 from re import Pattern
 from typing import (
     Any, Dict, List, Literal, Optional, TextIO, Tuple, Type,
@@ -117,14 +117,13 @@ def pattern_caster(value: str) -> Pattern:
 
 
 # Return an open TextIO stream from a file or stdin
-def textio_caster(value: str) -> TextIO:
+def textio_caster(value: str) -> Union[TextIO, Path]:
     if not sys.stdin.isatty():
         return sys.stdin
-    try:
-        file = open(value)
-        return file
-    except FileNotFoundError as e:
-        raise ValueError(f"no such file or directory: {value}") from e
+    file = Path(value)
+    if not file.exists():
+        raise ValueError(f"no such file or directory: {value}")
+    return file
 
 
 def union_caster_factory(typehint: Type[Union[Any]]) -> Callable:

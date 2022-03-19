@@ -1,6 +1,7 @@
 import io
 import re
 import datetime as dt
+import pathlib as p
 import typing as t
 
 import pytest
@@ -80,8 +81,8 @@ from casters import cast_to_type, get_typehint_name
     ('04:23:01.000384', None, False, '04:23:01.000384'),
 
     # TextIO stream from file
-    ('/dev/null', t.TextIO, True, io.TextIOWrapper),
-    ('/dev/null', io.TextIOWrapper, True, io.TextIOWrapper),
+    ('/dev/null', t.TextIO, True, p.Path),
+    ('/dev/null', io.TextIOWrapper, True, p.Path),
 ))
 def test_cast_from_shell(monkeypatch, value, type_hint, strict, expected_result):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
@@ -90,7 +91,7 @@ def test_cast_from_shell(monkeypatch, value, type_hint, strict, expected_result)
             cast_to_type(value, type_hint, strict=strict)
     elif isinstance(expected_result, type):
         result = cast_to_type(value, type_hint, strict=strict)
-        assert type(result) is io.TextIOWrapper
+        assert type(result) in (p.Path, p.PosixPath)
     else:
         result = cast_to_type(value, type_hint, strict=strict)
         assert result == expected_result

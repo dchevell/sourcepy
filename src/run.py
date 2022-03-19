@@ -10,34 +10,26 @@ from parsers import FunctionParameterParser
 
 
 def run_from_stub(module_path: pathlib.Path, fn_string: str, raw_args: List[str]) -> None:
-    with redirect_stdout():
+    with contextlib.redirect_stdout(sys.stderr):
         module = load_path(module_path)
         fn = get_callable(module, fn_string)
         parser = FunctionParameterParser(fn)
-        args, kwargs = parser.parse_fn_args(raw_args)
-        result = fn(*args, **kwargs)
-    print_result(result)
-
-
-@contextlib.contextmanager
-def redirect_stdout() -> Generator:
-    try:
-        sys.stdout = sys.__stderr__ # shell interprets stdout as return values; redirect to stderr
-        yield
-    finally:
-        sys.stdout = sys.__stdout__ # now we can print the return value to stdout
+        with parser.parse_fn_args(raw_args) as (args, kwargs):
+            result = fn(*args, **kwargs)
+            print_result(result)
 
 
 def print_result(result: Any) -> None:
-    if result is None:
-        return
-    if isinstance(result, bool):
-        print(str(result).lower())
-    elif isinstance(result, (Generator, Iterator)):
-        for y in result:
-            print_result(y)
-    else:
-        print(result)
+    with contextlib.redirect_stdout(sys.stdout):
+        if result is None:
+            return
+        if isinstance(result, bool):
+            print(str(result).lower())
+        elif isinstance(result, (Generator, Iterator)):
+            for y in result:
+                print_result(y)
+        else:
+            print(result)
 
 
 if __name__ == '__main__':
