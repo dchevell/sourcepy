@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from casters import cast_to_shell
-from loaders import load_path, get_definitions
+from loaders import load_path, module_definitions
 
 
 
@@ -66,15 +66,13 @@ def build_stub(module_path: Path) -> str:
     stub_contents.append(runner)
 
     stub_contents.append('\n# Definitions')
-    for obj_definition in get_definitions(module):
-#         full_name = obj_definition['parents'] + [obj_definition['name']]
-#         full_name = '.'.join(full_name)
-        full_name = obj_definition['name']
+    for obj_definition in module_definitions(module):
+        name = obj_definition['name']
         if obj_definition['type'] == 'function':
-            fn_def = make_fn(full_name, runner_name)
+            fn_def = make_fn(name, runner_name)
             stub_contents.append(fn_def)
         elif obj_definition['type'] == 'variable':
-            var_def = make_var(full_name, obj_definition['value'])
+            var_def = make_var(name, obj_definition['value'])
             stub_contents.append(var_def)
     stub = '\n'.join(stub_contents)
     return stub

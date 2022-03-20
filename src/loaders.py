@@ -6,10 +6,13 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Iterator, List, Optional
+from typing import Any, Iterator, List, Optional, Tuple
 
 from casters import isprimitive, iscollection
 
+
+
+Members = List[Tuple[str, Any]]
 
 
 def load_path(module_path: Path) -> ModuleType:
@@ -26,23 +29,35 @@ def load_path(module_path: Path) -> ModuleType:
     return module
 
 
-def get_definitions(module: ModuleType) -> Iterator[dict]:
-    members = dict(inspect.getmembers(module))
-    if '__all__' in members:
-        members = {k:v for k,v in members.items() if k in members['__all__']}
-    else:
-        members = {k:v for k,v in members.items() if not k.startswith('_')}
+def module_definitions(module: ModuleType) -> Iterator[dict]:
+    module_exports = getattr(module, '__all__', None)
+    valid_members = []
+    for name, value in inspect.getmembers(module):
+        if module_exports is not None:
+            if name in module_exports:
+                valid_members.append((name, value))
+            continue
+        if name.startswith('_'):
+            continue
+        if inspect.getmodule(value) in (module, None):
+            valid_members.append((name, value))
+    yield from member_definitions(valid_members)
 
-    for name, value in members.items():
-        if isinstance(value, type):
+
+def member_definitions(members: Members, parent: Optional[str] = None) -> Iterator[dict]:
+    for name, value in members:
+        if name.startswith('__') or isinstance(value, type):
             continue
-        if inspect.getmodule(value) not in (module, None):
-            continue
-        if (isprimitive(value) or iscollection(value)):
-            yield {'type': 'variable', 'name': name, 'value': value}
-        elif callable(value):
+        if inspect.isroutine(value):
+            if parent is not None:
+                name = f'{parent}.{name}'
             yield {'type': 'function', 'name': name, 'value': value}
-
+        elif isprimitive(value) or iscollection(value):
+            yield {'type': 'variable', 'name': name, 'value': value}
+        elif getattr(value, '__dict__', {}):
+            yield from member_definitions([(name, vars(value))])
+        if methods := inspect.getmembers(value, inspect.ismethod):
+            yield from member_definitions(methods, parent=name)
 
 
 def get_callable(parent: ModuleType, method_str: str) -> Callable:

@@ -20,9 +20,9 @@ def run_from_stub(module_path: pathlib.Path, fn_string: str, raw_args: List[str]
 
 
 def print_result(result: Any) -> None:
+    if result is None:
+        return
     with contextlib.redirect_stdout(sys.stdout):
-        if result is None:
-            return
         if isinstance(result, bool):
             print(str(result).lower())
         elif isinstance(result, (Generator, Iterator)):
