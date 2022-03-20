@@ -26,16 +26,20 @@ def print_result(result: Any) -> None:
         if isinstance(result, bool):
             print(str(result).lower())
         elif isinstance(result, (Generator, Iterator)):
-            for y in result:
-                print_result(y)
+            for line in result:
+                print_result(line)
         else:
             print(result)
 
 
-if __name__ == '__main__':
+def main() -> None:
     if len(sys.argv) < 3:
         sys.exit("sourcepy_run: not enough arguments")
     module_path = pathlib.Path(sys.argv[1])
     fn_string = sys.argv[2]
     raw_args = sys.argv[3:]
     run_from_stub(module_path, fn_string, raw_args)
+
+
+if __name__ == '__main__':
+    main()

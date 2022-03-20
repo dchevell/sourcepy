@@ -247,11 +247,11 @@ def required(params: ParamsList) -> List[Parameter]:
 
 
 def stdin_target(params: ParamsList) -> Optional[Parameter]:
-    for p in params:
+    for param in params:
         if sys.stdin.isatty():
             return None
-        if istextio(p.annotation):
-            return p
+        if istextio(param.annotation):
+            return param
     if len(params) == len(keyword_only(params)):
         return None
     return next(iter(params))

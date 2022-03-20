@@ -128,14 +128,14 @@ def textio_caster(value: str) -> Union[TextIO, Path]:
 
 def union_caster_factory(typehint: Type[Union[Any]]) -> Callable:
     def union_caster(value: str) -> Any:
-        types = get_args(typehint)
-        for t in types:
+        type_args = get_args(typehint)
+        for _type in type_args:
             try:
-                typed_value = cast_to_type(value, t, strict=True)
+                typed_value = cast_to_type(value, _type, strict=True)
             except (TypeError, ValueError):
                 continue
             # prevent float matching ints if both in Union
-            if set(types).issuperset({int, float}):
+            if set(type_args).issuperset({int, float}):
                 if value != str(typed_value):
                     continue
             return typed_value
@@ -145,14 +145,14 @@ def union_caster_factory(typehint: Type[Union[Any]]) -> Callable:
 
 def literal_caster_factory(typehint: Type) -> Callable:
     def literal_caster(value: str) -> Any:
-        choices = get_args(typehint)
-        for c in choices:
+        type_literals = get_args(typehint)
+        for lit in type_literals:
             try:
-                choice = cast_to_type(value, type(c), strict=True)
+                lit = cast_to_type(value, type(lit), strict=True)
             except (TypeError, ValueError):
                 continue
-            if choice in choices:
-                return choice
+            if lit in type_literals:
+                return lit
         raise ValueError(f"invalid literal for {typehint}: {value}")
     return literal_caster
 
@@ -169,10 +169,11 @@ def unknown_caster(value: str) -> Union[bool, int, str]:
 def get_typehint_name(typehint: Type) -> str:
     if isunion(typehint):
         names = []
-        for t in get_args(typehint):
-            if t == type(None):
+        type_args = get_args(typehint)
+        for _type in type_args:
+            if _type == type(None):
                 continue
-            name = get_typehint_name(t)
+            name = get_typehint_name(_type)
             names.append(name)
         return ' | '.join(names)
     origin = get_origin(typehint)
