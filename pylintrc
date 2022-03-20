@@ -89,8 +89,6 @@ disable=raw-checker-failed,
         missing-module-docstring,
         missing-class-docstring,
         missing-function-docstring,
-        invalid-name,
-        redefined-outer-name,
         protected-access
 
 # Enable the message, report, category or checker with the given id(s). You can
@@ -391,11 +389,14 @@ function-naming-style=snake_case
 #function-rgx=
 
 # Good variable names which should always be accepted, separated by a comma.
-good-names=i,
-           j,
-           k,
-           ex,
-           Run,
+good-names=i,                       # counter
+           j,                       # counter (nested)
+           k,                       # counter (nested)
+           f,                       # file object
+           e,                       # exception
+           ex,                      # exception
+           fn,                      # function
+           BooleanOptionalAction,   # special backward compat fallback
            _
 
 # Good variable names regexes, separated by a comma. If names match any regex,

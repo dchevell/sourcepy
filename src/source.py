@@ -1,3 +1,4 @@
+import contextlib
 import os
 import sys
 import textwrap
@@ -6,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from casters import cast_to_shell
-from loaders import load_path, get_definitions
+from loaders import load_path, module_definitions
 
 
 
@@ -17,8 +18,8 @@ SOURCEPY_BIN = Path(__file__).resolve().parent
 def make_var(name: str, value: Any) -> str:
     value, typedef = cast_to_shell(value)
     var_def = textwrap.dedent(f"""\
-            declare {('-g ' + typedef).strip()} {name}
-            {name}={value}
+        declare {('-x ' + typedef).strip()} {name}
+        {name}={value}
     """)
     return var_def
 
@@ -43,8 +44,8 @@ def make_runner(runner_name: str, module_path: Path) -> str:
 
 def escape(path: Path) -> str:
     escaped = str(path)
-    for c in '. /':
-        escaped = escaped.replace(c, '_')
+    for char in '. /':
+        escaped = escaped.replace(char, '_')
     return escaped
 
 
@@ -65,14 +66,13 @@ def build_stub(module_path: Path) -> str:
     stub_contents.append(runner)
 
     stub_contents.append('\n# Definitions')
-    for d in get_definitions(module):
-        full_name = d['parents'] + [d['name']]
-        full_name = '.'.join(full_name)
-        if d['type'] == 'function':
-            fn_def = make_fn(full_name, runner_name)
+    for obj_definition in module_definitions(module):
+        name = obj_definition['name']
+        if obj_definition['type'] == 'function':
+            fn_def = make_fn(name, runner_name)
             stub_contents.append(fn_def)
-        elif d['type'] == 'variable':
-            var_def = make_var(full_name, d['value'])
+        elif obj_definition['type'] == 'variable':
+            var_def = make_var(name, obj_definition['value'])
             stub_contents.append(var_def)
     stub = '\n'.join(stub_contents)
     return stub
@@ -86,11 +86,16 @@ def write_stub_file(stub_contents: str, stub_name: str) -> Path:
     return stub_file
 
 
-if __name__ == '__main__':
+def main() -> None:
     if len(sys.argv) < 2:
         sys.exit("sourcepy: not enough arguments")
-    module_path = Path(sys.argv[1]).resolve()
-    stub_contents = build_stub(module_path)
-    stub_name = escape(module_path) + '.sh'
-    stub_file = write_stub_file(stub_contents, stub_name)
+    with contextlib.redirect_stdout(sys.stderr):
+        module_path = Path(sys.argv[1]).resolve()
+        stub_contents = build_stub(module_path)
+        stub_name = escape(module_path) + '.sh'
+        stub_file = write_stub_file(stub_contents, stub_name)
     print(stub_file)
+
+
+if __name__ == '__main__':
+    main()

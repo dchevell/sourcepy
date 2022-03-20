@@ -3,13 +3,16 @@ import contextlib
 import inspect
 import sys
 
-from argparse import Action, _ArgumentGroup as ArgumentGroup, _StoreTrueAction as StoreTrueAction
+from argparse import (
+    Action, _ArgumentGroup as ArgumentGroup,
+    _StoreTrueAction as StoreTrueAction
+)
 from collections.abc import Callable, ValuesView
 from inspect import Parameter
 from pathlib import Path
 from typing import (
-    Any, Dict, Iterator, List, Literal, Optional, TextIO, Tuple,
-    Type, TypedDict, Union, get_args, get_origin
+    Any, Dict, Iterator, List, Literal, Optional, TextIO,
+    Tuple, Type, TypedDict, Union, get_args, get_origin
 )
 
 from casters import cast_to_type, islist, istextio, get_typehint_name
@@ -117,7 +120,6 @@ class FunctionParameterParser(argparse.ArgumentParser):
         if param in positional_only(self.params):
             return param.name
         if param in positional_or_keyword(self.params):
-            print(param.name)
             return f'/ {param.name}'
         return ''
 
@@ -247,11 +249,11 @@ def required(params: ParamsList) -> List[Parameter]:
 
 
 def stdin_target(params: ParamsList) -> Optional[Parameter]:
-    for p in params:
+    for param in params:
         if sys.stdin.isatty():
             return None
-        if istextio(p.annotation):
-            return p
+        if istextio(param.annotation):
+            return param
     if len(params) == len(keyword_only(params)):
         return None
     return next(iter(params))
