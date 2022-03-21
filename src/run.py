@@ -8,9 +8,12 @@ from loaders import get_callable, load_path
 from parsers import FunctionParameterParser
 
 
+STDERR = sys.__stderr__
+STDOUT = sys.__stdout__
+
 
 def run_from_stub(module_path: pathlib.Path, fn_string: str, raw_args: List[str]) -> None:
-    with contextlib.redirect_stdout(sys.stderr):
+    with contextlib.redirect_stdout(STDERR):
         module = load_path(module_path)
         fn = get_callable(module, fn_string)
         parser = FunctionParameterParser(fn)
@@ -22,12 +25,12 @@ def run_from_stub(module_path: pathlib.Path, fn_string: str, raw_args: List[str]
 def print_result(result: Any) -> None:
     if result is None:
         return
-    with contextlib.redirect_stdout(sys.stdout):
+    with contextlib.redirect_stdout(STDOUT):
         if isinstance(result, bool):
             print(str(result).lower())
         elif isinstance(result, (Generator, Iterator)):
             for line in result:
-                print_result(line)
+                print(line)
         else:
             print(result)
 
