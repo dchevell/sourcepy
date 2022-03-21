@@ -3,10 +3,7 @@ import contextlib
 import inspect
 import sys
 
-from argparse import (
-    Action, _ArgumentGroup as ArgumentGroup,
-    _StoreTrueAction as StoreTrueAction
-)
+from argparse import Action, _ArgumentGroup as ArgumentGroup
 from collections.abc import Callable, ValuesView
 from inspect import Parameter
 from pathlib import Path
@@ -154,7 +151,10 @@ class FunctionParameterParser(argparse.ArgumentParser):
         for param in self.params:
             if param.name not in parsed:
                 continue
-            value = self.typecaster(parsed[param.name], param)
+            try:
+                value = self.typecaster(parsed[param.name], param)
+            except (ValueError, TypeError) as e:
+                self.error(str(e))
             if istextio(param.annotation) and sys.stdin.isatty():
                 value = open_file_args(value)
                 open_handles.extend(value if isinstance(value, list) else [value])
@@ -167,7 +167,6 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 args.insert(target_index, value)
             else:
                 args.append(value)
-
         try:
             yield tuple(args), kwargs
         finally:
@@ -176,48 +175,30 @@ class FunctionParameterParser(argparse.ArgumentParser):
 
     def parse_ambiguous_args(self, raw_args: List[str]) -> Dict[str, Any]:
         known, unknown = self.parse_known_args(raw_args)
+        parsed = vars(known)
         # pos_or_kw args passed as positional args will end up in "unknown"
-        # We determine what they are here, then re-parse those args to
-        # complete populating the parsed args namespace
-        remaining = []
+        # We determine what they are here and manually add them to our parsed args
         unused_params = []
         for param in positional_or_keyword(self.params):
-            if not hasattr(known, param.name):
+            if param.name not in parsed:
                 unused_params.append(param)
         for param in unused_params:
             try:
                 value = unknown.pop(0)
             except IndexError:
                 break
-            arg = self.make_raw_arg(param, value)
-            remaining.extend(arg)
-            if param is unused_params[-1] and islistarg(param):
-                remaining.extend(unknown)
-                unknown.clear()
+            if islistarg(param):
+                parsed[param.name] = [value]
+                if param is unused_params[-1]:
+                    parsed[param.name].extend(unknown)
+                    unknown.clear()
+            else:
+                parsed[param.name] = value
+
         # if more values exist, too many args were supplied
         if unknown:
             self.error(f"unrecognised arguments: {' '.join(unknown)}")
-        raw_args.extend(remaining)
-        self.parse_known_args(raw_args, namespace=known)
-        return vars(known)
-
-    def make_raw_arg(self, param: Parameter, value: str) -> List[str]:
-        # Inspect options args (self._action_groups[1]) to determine type & flag name
-        actions = self.groups['positional or keyword']._actions
-        target = next(a for a in actions if a.dest == param.name)
-        names = list(target.option_strings)
-        # Don't use isinstance, we've replaced BooleanOptionalAction with str < 3.9
-        if type(target) in (BooleanOptionalAction, StoreTrueAction):
-            valid = ['true', 'false']
-            arg_key = dict(zip(valid, names))
-            try:
-                arg = arg_key[value]
-                return [arg]
-            except KeyError:
-                self.error(f"argument {param.name}: invalid choice: {value} "
-                           f"(choose from {', '.join(valid + names)})")
-        name = next(iter(names))
-        return [name, value]
+        return parsed
 
     def typecaster(self, value: Any, param: Parameter) -> Any:
         if not isinstance(value, (str, list)):
