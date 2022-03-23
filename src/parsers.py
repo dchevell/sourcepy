@@ -12,7 +12,7 @@ from typing import (
     Tuple, Type, TypedDict, Union, get_args, get_origin
 )
 
-from casters import cast_to_type, islist, istextio, get_typehint_name
+from casters import cast_to_type, istypesubclass, istextio, get_typehint_name
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -27,6 +27,7 @@ STDIN = '==STDIN==' # placeholder for stdin
 # Type aliases
 FileHandles = Union[TextIO, List[TextIO]]
 FilePaths = Union[Path, List[Path]]
+NumArgs = Optional[Union[int, Literal['*']]]
 OptionsAction = Optional[Union[str, Type[Action]]]
 OptionsNargs = Optional[Union[int, str]]
 ParamsList = Union[List[Parameter], ValuesView[Parameter]]
@@ -121,9 +122,10 @@ class FunctionParameterParser(argparse.ArgumentParser):
         return ''
 
     def options_nargs(self, param: Parameter) -> OptionsNargs:
-        if islistarg(param) and param not in positional_only(self.params)[:-1]:
+        nargs = get_nargs(param)
+        if nargs == '*' and param not in positional_only(self.params)[:-1]:
             return '*'
-        return None
+        return nargs
 
     # pylint: disable=R0201
     def options_help(self, param: Parameter) -> str:
@@ -183,17 +185,18 @@ class FunctionParameterParser(argparse.ArgumentParser):
             if param.name not in parsed:
                 unused_params.append(param)
         for param in unused_params:
-            try:
-                value = unknown.pop(0)
-            except IndexError:
-                break
-            if islistarg(param):
-                parsed[param.name] = [value]
-                if param is unused_params[-1]:
-                    parsed[param.name].extend(unknown)
-                    unknown.clear()
+            nargs = get_nargs(param)
+            if nargs is None:
+                try:
+                    parsed[param.name] = unknown.pop(0)
+                except IndexError:
+                    break
             else:
-                parsed[param.name] = value
+                args_range = None if nargs == '*' else nargs
+                value = unknown[:args_range]
+                del unknown[:args_range]
+                if value:
+                    parsed[param.name] = value
 
         # if more values exist, too many args were supplied
         if unknown:
@@ -248,6 +251,26 @@ def get_typehint(param: Parameter) -> Type:
     return param.empty
 
 
+def get_nargs(param: Parameter) -> NumArgs:
+    typehint = get_typehint(param)
+    if istypesubclass(typehint, (list, set)):
+        return '*'
+    if istypesubclass(typehint, tuple):
+        member_types = None
+        types = [typehint]
+        while member_types is None:
+            _type = types.pop(0)
+            args = get_args(_type)
+            if get_origin(_type) is tuple:
+                member_types = args
+                break
+            types.extend(args)
+        if Ellipsis in member_types or len(member_types) == 0:
+            return '*'
+        return len(member_types)
+    return None
+
+
 def open_file_args(value: FilePaths) -> FileHandles:
     if isinstance(value, list):
         return [v.open() for v in value]
@@ -256,8 +279,3 @@ def open_file_args(value: FilePaths) -> FileHandles:
 
 def isbooleanaction(param: Parameter) -> bool:
     return bool in (param.annotation, type(param.default))
-
-
-def islistarg(param: Parameter) -> bool:
-    typehint = get_typehint(param)
-    return islist(typehint)
