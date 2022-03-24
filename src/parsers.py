@@ -12,7 +12,7 @@ from typing import (
     Tuple, Type, TypedDict, Union, get_args, get_origin
 )
 
-from casters import cast_to_type, istypesubclass, istextio, get_typehint_name
+from casters import cast_to_type, issubtype, istextio, get_typehint_name
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -24,20 +24,19 @@ else:
 
 STDIN = '==STDIN==' # placeholder for stdin
 
-# Type aliases
 FileHandles = Union[TextIO, List[TextIO]]
 FilePaths = Union[Path, List[Path]]
 NumArgs = Optional[Union[int, Literal['*']]]
 OptionsAction = Optional[Union[str, Type[Action]]]
 OptionsNargs = Optional[Union[int, str]]
 ParamsList = Union[List[Parameter], ValuesView[Parameter]]
-ParserContextManager = Iterator[Tuple[Tuple, Dict[str, Any]]]
+ParserContextManager = Iterator[Tuple[Tuple[Any, ...], Dict[str, Any]]]
 
 
 class ArgOptions(TypedDict, total=False):
     default: str
     action: Union[str, Type[Action]]
-    choices: List
+    choices: List[Any]
     metavar: str
     nargs: Union[int, str]
     help: str
@@ -45,7 +44,7 @@ class ArgOptions(TypedDict, total=False):
 
 class FunctionParameterParser(argparse.ArgumentParser):
 
-    def __init__(self, fn: Callable, /, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, fn: Callable[[Any], Any], /, *args: Any, **kwargs: Any) -> None:
         if 'prog' not in kwargs:
             kwargs['prog'] = fn.__name__
         if 'description' not in kwargs:
@@ -78,18 +77,20 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 name = param.name
             else:
                 name = '--' + param.name.replace('_', '-')
-            options: Any = {}
-            options['default'] = self.options_default(param)
-            options['action'] = self.options_action(param)
-            options['choices'] = self.options_choices(param)
-            options['metavar'] = self.options_metavar(param)
-            options['nargs'] = self.options_nargs(param)
-            options['help'] = self.options_help(param)
-            for key in list(options.keys()):
-                if options[key] is None:
-                    del options[key]
-            arg_options: ArgOptions = options
-            group.add_argument(name, **arg_options)
+            options: ArgOptions = {}
+            if default := self.options_default(param):
+                options['default'] = default
+            if action := self.options_action(param):
+                options['action'] = action
+            if choices := self.options_choices(param):
+                options['choices'] = choices
+            if metavar := self.options_metavar(param):
+                options['metavar'] = metavar
+            if nargs := self.options_nargs(param):
+                options['nargs'] = nargs
+            if helptext := self.options_help(param):
+                options['help'] = helptext
+            group.add_argument(name, **options)
         return group
 
     def options_default(self, param: Parameter) -> Optional[str]:
@@ -105,7 +106,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
             return BooleanOptionalAction
         return None
 
-    def options_choices(self, param: Parameter) -> Optional[List]:
+    def options_choices(self, param: Parameter) -> Optional[List[Any]]:
         if isbooleanaction(param) and param in positional_only(self.params):
             choices = ['true', 'false']
             return choices
@@ -148,7 +149,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 self.error(f"the following arguments are required: {param.name}")
 
         open_handles = []
-        args: List = []
+        args: List[Any] = []
         kwargs: Dict[str, Any] = {}
         for param in self.params:
             if param.name not in parsed:
@@ -243,19 +244,15 @@ def stdin_target(params: ParamsList) -> Optional[Parameter]:
     return next(iter(params))
 
 
-def get_typehint(param: Parameter) -> Type:
-    if param.annotation not in(param.empty, Any):
-        return param.annotation
-    if param.default is not param.empty:
-        return type(param.default)
-    return param.empty
+def isbooleanaction(param: Parameter) -> bool:
+    return bool in (param.annotation, type(param.default))
 
 
 def get_nargs(param: Parameter) -> NumArgs:
     typehint = get_typehint(param)
-    if istypesubclass(typehint, (list, set)):
+    if issubtype(typehint, (list, set)):
         return '*'
-    if istypesubclass(typehint, tuple):
+    if issubtype(typehint, tuple):
         member_types = None
         types = [typehint]
         while member_types is None:
@@ -271,11 +268,15 @@ def get_nargs(param: Parameter) -> NumArgs:
     return None
 
 
+def get_typehint(param: Parameter) -> Type[Any]:
+    if param.annotation not in(param.empty, Any):
+        return param.annotation
+    if param.default is not param.empty:
+        return type(param.default)
+    return param.empty
+
+
 def open_file_args(value: FilePaths) -> FileHandles:
     if isinstance(value, list):
         return [v.open() for v in value]
     return value.open()
-
-
-def isbooleanaction(param: Parameter) -> bool:
-    return bool in (param.annotation, type(param.default))

@@ -1,3 +1,4 @@
+import collections.abc as abc
 import io
 import re
 import datetime as dt
@@ -18,6 +19,13 @@ from casters import cast_to_type, get_typehint_name
     ('true', bool, True, True),
     ('false', bool, False, False),
     ('true', None, False, True),
+
+    # Support containers
+    (['a', 'b', 'c'], list, True, ['a', 'b', 'c']),
+    (['a', 'b', 'c'], tuple, True, ('a', 'b', 'c')),
+    (['a', 'b', 'c'], set, True, {'a', 'b', 'c'}),
+    (['a', 'b', 'c'], abc.Sequence, True, ['a', 'b', 'c']),
+    (['a', 'b', 'c'], abc.Collection, True, ['a', 'b', 'c']),
 
     # Support inner types for containers
     (['1', '2', '3'], list[int], True, [1, 2, 3]),

@@ -6,9 +6,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Iterator, List, Optional, Tuple
-
-from casters import isprimitive, iscollection
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 
 
@@ -29,7 +27,7 @@ def load_path(module_path: Path) -> ModuleType:
     return module
 
 
-def module_definitions(module: ModuleType) -> Iterator[dict]:
+def module_definitions(module: ModuleType) -> Iterator[Dict[str, Any]]:
     module_exports = getattr(module, '__all__', None)
     valid_members = []
     for name, value in inspect.getmembers(module):
@@ -44,7 +42,7 @@ def module_definitions(module: ModuleType) -> Iterator[dict]:
     yield from member_definitions(valid_members)
 
 
-def member_definitions(members: Members, parent: Optional[str] = None) -> Iterator[dict]:
+def member_definitions(members: Members, parent: Optional[str] = None) -> Iterator[Dict[str, Any]]:
     for name, value in members:
         if name.startswith('__') or isinstance(value, type):
             continue
@@ -60,7 +58,7 @@ def member_definitions(members: Members, parent: Optional[str] = None) -> Iterat
             yield from member_definitions(methods, parent=name)
 
 
-def get_callable(parent: ModuleType, method_str: str) -> Callable:
+def get_callable(parent: ModuleType, method_str: str) -> Callable[[Any], Any]:
     attr_list = method_str.split('.')
     current = parent
     for attr in attr_list:
@@ -68,3 +66,11 @@ def get_callable(parent: ModuleType, method_str: str) -> Callable:
     if not callable(current):
         raise ValueError(f'{method_str} does not point to a valid callable')
     return current
+
+
+def isprimitive(obj: Any) -> bool:
+    return isinstance(obj, (int, float, bool, str))
+
+
+def iscollection(obj: Any) -> bool:
+    return isinstance(obj, (tuple, list, set, dict))
