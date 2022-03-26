@@ -1,3 +1,4 @@
+import collections.abc as abc
 import io
 import re
 import datetime as dt
@@ -19,27 +20,26 @@ from casters import cast_to_type, get_typehint_name
     ('false', bool, False, False),
     ('true', None, False, True),
 
-    # Support shell lists (space separated values)
-    ('one two three', list, True, ['one', 'two', 'three']),
-    ('one two three', t.List, True, ['one', 'two', 'three']),
-    ('one two three', tuple, True, ('one', 'two', 'three')),
-    ('one two three', t.Tuple, True, ('one', 'two', 'three')),
-    ('one "two three four" five', list, True, ['one', 'two three four', 'five']),
-    ("one 'two three four' five", t.List, True, ['one', 'two three four', 'five']),
+    # Support containers
+    (['a', 'b', 'c'], list, True, ['a', 'b', 'c']),
+    (['a', 'b', 'c'], tuple, True, ('a', 'b', 'c')),
+    (['a', 'b', 'c'], set, True, {'a', 'b', 'c'}),
+    (['a', 'b', 'c'], abc.Sequence, True, ['a', 'b', 'c']),
+    (['a', 'b', 'c'], abc.Collection, True, ['a', 'b', 'c']),
 
     # Support inner types for containers
-    ('1 2 3', list[int], True, [1, 2, 3]),
-    ('false 1 two 3', list[bool | int | str], True, [False, 1, 'two', 3]),
-    ('1', tuple[int], True, (1,)),
-    ('false 1 two 3', tuple[bool, int, str, int], True, (False, 1, 'two', 3)),
-    ('1 2 3', tuple[int, ...], True, (1, 2, 3)),
-    ('1 2 3', tuple[int], True, ValueError),
-    ('1 2 3', tuple[int, int], True, ValueError),
-
+    (['1', '2', '3'], list[int], True, [1, 2, 3]),
+    (['false', '1', 'two', '3'], list[bool | int | str], True, [False, 1, 'two', 3]),
+    (['1'], tuple[int], True, (1,)),
+    (['false', '1', 'two', '3'], tuple[bool, int, str, int], True, (False, 1, 'two', 3)),
+    (['1', '2', '3'], tuple[int, ...], True, (1, 2, 3)),
+    (['1', '2', '3'], tuple[int], True, ValueError),
+    (['1', '2', '3'], tuple[int, int], True, ValueError),
 
     # Support t.Union types, including Optionals
     ('test', t.Union[int, str], True, 'test'),
-    ('test', t.Union[int, list], True, ['test']),
+    (['test'], t.Union[int, list], True, ['test']),
+    (['1'], t.Union[int, list], True, 1),
     ('1.0', t.Union[int, float], True, 1.0),
     ('1.0', t.Union[float, int], True, 1.0),
     ('1', t.Union[int, float], True, 1),
@@ -47,8 +47,8 @@ from casters import cast_to_type, get_typehint_name
     ('1.0', int | float, True, 1.0),
     ('1', float | int, True, 1),
     ('1', bool | int, True, 1),
-    ('test', t.Optional[list], True, ['test']),
-    ('1 2 3', t.Optional[tuple[int, ...]], True, (1, 2, 3)),
+    (['test'], t.Optional[list], True, ['test']),
+    (['1', '2', '3'], t.Optional[tuple[int, ...]], True, (1, 2, 3)),
 
     # Support literals
     ('1', t.Literal['2', 1], True, 1),
@@ -65,8 +65,8 @@ from casters import cast_to_type, get_typehint_name
     # Support json values for dict/list types
     ('{"one": 2, "three": [4, 5]}', dict, True, {"one": 2, "three": [4, 5]}),
     ('{"one": 2, "three": [4, 5]}', t.Dict, True, {"one": 2, "three": [4, 5]}),
-    ('["one", {"two": 3, "four": 5}]', list, True, ["one", {"two": 3, "four": 5}]),
-    ('["one", {"two": 3, "four": 5}]', t.List, True, ["one", {"two": 3, "four": 5}]),
+    (['["one", {"two": 3, "four": 5}]'], list, True, ["one", {"two": 3, "four": 5}]),
+    (['["one", {"two": 3, "four": 5}]'], t.List, True, ["one", {"two": 3, "four": 5}]),
 
     # Support native dt.datetime types: dt.date, dt.datetime, time
     ('1646803515', dt.date, True, dt.date.fromtimestamp(1646803515)),
@@ -84,7 +84,7 @@ from casters import cast_to_type, get_typehint_name
     ('/dev/null', t.TextIO, True, p.Path),
     ('/dev/null', io.TextIOWrapper, True, p.Path),
 ))
-def test_cast_from_shell(monkeypatch, value, type_hint, strict, expected_result):
+def test_cast_to_type(monkeypatch, value, type_hint, strict, expected_result):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     if isinstance(expected_result, type) and issubclass(expected_result, Exception):
         with pytest.raises(expected_result, match='invalid literal'):

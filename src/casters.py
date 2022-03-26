@@ -1,123 +1,163 @@
+import inspect
 import json
 import re
-import shlex
 import sys
 
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import date, datetime, time
 from io import TextIOWrapper
 from pathlib import Path
 from re import Pattern
 from typing import (
-    Any, Dict, List, Literal, Optional, TextIO, Tuple, Type,
-    Union, get_args, get_origin
+    Any, Dict, List, Literal, Optional, TextIO, Tuple, Type, Union,
+    get_args, get_origin
 )
+from typing import _Final as TypingBase # type: ignore[attr-defined]
 
 if sys.version_info >= (3, 10):
     from types import UnionType
 else:
-    UnionType = object() # Dummy obj
+    UnionType = object() # Dummy type
 
 
 
-def cast_to_type(value: str, typehint: Optional[type] = None, *, strict: bool = False) -> Any:
-    typecaster = get_typecaster(typehint) or typehint
+RawStringList = Union[str, List[str]]
+TypeHint = Union[Type[Any], TypingBase]
+TypeHintTuple = Union[TypeHint, Tuple[TypeHint]]
+TypeMap = Dict[Type[Any], Optional[Dict[Type[Any], Any]]]
+
+
+def cast_to_type(value: RawStringList, typehint: Optional[TypeHint] = None, *,
+                 strict: bool = False) -> Any:
+    typecaster = get_caster(typehint)
     try:
-        return typecaster(value)
+        typed_value = typecaster(value)
+        if typed_value is None:
+            raise ValueError(f"invalid literal for {typehint}: {value}")
+        return typed_value
     except (TypeError, ValueError) as e:
         if strict:
-            raise e
+            raise ValueError(f"invalid literal for {typehint}: {value}") from e
         return value
 
 
-def get_typecaster(typehint: Any) -> Callable:
-    typecast_map = {
-        bool: bool_caster,
-        dict: dict_caster,
-        list: list_caster_factory(typehint),
-        tuple: tuple_caster_factory(typehint),
-        date: datetime_caster_factory(typehint),
-        datetime: datetime_caster_factory(typehint),
-        time: datetime_caster_factory(typehint),
-        Pattern: pattern_caster,
-        TextIO: textio_caster,
-        TextIOWrapper: textio_caster,
-        Union: union_caster_factory(typehint),
-        UnionType: union_caster_factory(typehint),
-        Literal: literal_caster_factory(typehint),
+def get_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    """Returns a conversion class most appropriate for the
+    supplied type hint. Potential matches are checked in
+    order from most to least specific to account for
+    overlapping types (e.g. ABCs).
+    """
+    if typehint in (Any, None):
+        return untyped_caster
+    origin = get_origin(typehint)
+    if origin in (Union, UnionType):
+        return union_caster(typehint)
+    typecasters: Dict[TypeHintTuple, Callable[[Any], Any]] = {
+        (str, bytes):              generic_caster(typehint),
+        (dict,):                   json_caster(typehint),
+        (bool,):                   bool_caster,
+        (Collection,):             collection_caster(typehint),
+        (date, time):              datetime_caster(typehint),
+        (Pattern,):                pattern_caster,
+        (TextIO, TextIOWrapper):   textio_caster,
+        (Literal,):                literal_caster(typehint),
     }
-
-    typecaster = (
-        typecast_map.get(typehint) or
-        typecast_map.get(get_origin(typehint)) or
-        typehint or # int, float, other classes with single-arg constructors
-        unknown_caster # typehint is Any or None
-    )
-    if callable(typecaster):
-        return typecaster
-    raise TypeError("invalid typecaster return value")
+    for cls, caster in typecasters.items():
+        if typehint in cls:
+            return caster
+        if origin in cls and origin is not None:
+            return caster
+        if issubtype(typehint, cls):
+            return caster
+    return generic_caster(typehint)
 
 
-def bool_caster(value: str) -> bool:
+def union_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    def caster(value: RawStringList) -> Any:
+        type_args = get_args(typehint)
+        for _type in type_args:
+            try:
+                if (isinstance(value, list)
+                    and not issubtype(_type, Collection)
+                    and len(value) == 1):
+                    typed_value = cast_to_type(value[0], _type, strict=True)
+                else:
+                    typed_value = cast_to_type(value, _type, strict=True)
+            except (TypeError, ValueError):
+                continue
+            # prevent float matching ints if both in Union
+            if set(type_args).issuperset({int, float}):
+                if value != str(typed_value):
+                    continue
+            return typed_value
+    return caster
+
+
+def generic_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    def caster(value: str) -> Any:
+        try:
+            return typehint(value)
+        except TypeError:
+            return value
+    return caster
+
+
+def bool_caster(value: str) -> Optional[bool]:
     if value in ('true', 'false'):
         return value == 'true'
-    raise ValueError(f"invalid literal for boolean: {value}")
+    return None
 
 
-def dict_caster(value: str) -> Dict:
-    json_value = json.loads(value)
-    if not isinstance(json_value, dict):
-        raise ValueError(f"invalid literal for dict: {value}")
-    return json_value
+def json_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    def caster(value: str) -> Optional[Union[Dict[str, Any], List[Any]]]:
+        try:
+            json_value = json.loads(value)
+            if istype(type(json_value), (typehint, get_origin(typehint))):
+                return json_value
+        except json.decoder.JSONDecodeError:
+            pass
+        return None
+    return caster
 
 
-def list_caster_factory(typehint: Type[List]) -> Callable:
-    def list_caster(value: Union[List, str]) -> List:
-        if isinstance(value, list) and len(value) == 1:
-            value = value.pop()
+def collection_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    def caster(value: RawStringList) -> Optional[Collection[Any]]:
+        base_type = get_origin(typehint) or typehint
         if isinstance(value, str):
-            try:
-                json_value = json.loads(value)
-                if isinstance(json_value, list):
-                    return json_value
-            except json.decoder.JSONDecodeError:
-                pass
-            value = shlex.split(value)
-        if member_type := get_args(typehint):
-            return [cast_to_type(v, member_type[0], strict=True) for v in value]
-        return value
-    return list_caster
-
-
-def tuple_caster_factory(typehint: Type[Tuple]) -> Callable:
-    def tuple_caster(value: str) -> Tuple:
-        values = shlex.split(value)
+            value = [value]
+        if base_type is list and len(value) == 1:
+            typecaster = json_caster(typehint)
+            json_value = typecaster(value[0])
+            if json_value is not None:
+                return json_value
         if member_types := get_args(typehint):
-            if len(values) != len(member_types):
-                if Ellipsis not in member_types:
-                    raise ValueError(f"invalid literal for {typehint}: {value}")
-                member_types = (member_types[0],) * len(values)
-            return tuple(
-                (cast_to_type(v, t, strict=True) for v, t in zip(values, member_types))
-            )
-        return tuple(values)
-    return tuple_caster
+            if not issubclass(base_type, tuple) or Ellipsis in member_types:
+                member_types = (member_types[0],) * len(value)
+            elif issubclass(base_type, tuple) and len(member_types) != len(value):
+                return None
+            member_values = []
+            for m_value, m_type in zip(value, member_types):
+                typed_value = cast_to_type(m_value, m_type, strict=True)
+                member_values.append(typed_value)
+            value = member_values
+        container_type = list if inspect.isabstract(base_type) else base_type
+        return container_type(value)
+    return caster
 
 
-def datetime_caster_factory(typehint: Type[Union[date, datetime, time]]) -> Callable:
-    def datetime_caster(value: str) -> Union[date, datetime, time]:
-        if value.isdecimal() and not issubclass(typehint, time):
+def datetime_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    def caster(value: str) -> Union[date, datetime, time]:
+        if value.isdecimal() and issubtype(typehint, date):
             return typehint.fromtimestamp(int(value))
         return typehint.fromisoformat(value)
-    return datetime_caster
+    return caster
 
 
-def pattern_caster(value: str) -> Pattern:
+def pattern_caster(value: str) -> Any:
     return re.compile(value)
 
 
-# Return an open TextIO stream from a file or stdin
-def textio_caster(value: str) -> Union[TextIO, Path]:
+def textio_caster(value: str) -> Any:
     if not sys.stdin.isatty():
         return sys.stdin
     file = Path(value)
@@ -126,39 +166,21 @@ def textio_caster(value: str) -> Union[TextIO, Path]:
     return file
 
 
-def union_caster_factory(typehint: Type[Union[Any]]) -> Callable:
-    def union_caster(value: str) -> Any:
-        type_args = get_args(typehint)
-        for _type in type_args:
-            try:
-                typed_value = cast_to_type(value, _type, strict=True)
-            except (TypeError, ValueError):
-                continue
-            # prevent float matching ints if both in Union
-            if set(type_args).issuperset({int, float}):
-                if value != str(typed_value):
-                    continue
-            return typed_value
-        raise ValueError(f"invalid literal for {typehint}: {value}")
-    return union_caster
-
-
-def literal_caster_factory(typehint: Type) -> Callable:
-    def literal_caster(value: str) -> Any:
+def literal_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    def caster(value: str) -> Any:
         type_literals = get_args(typehint)
         for lit in type_literals:
             try:
-                lit = cast_to_type(value, type(lit), strict=True)
+                typed_value = cast_to_type(value, type(lit), strict=True)
             except (TypeError, ValueError):
                 continue
-            if lit in type_literals:
-                return lit
-        raise ValueError(f"invalid literal for {typehint}: {value}")
-    return literal_caster
+            if typed_value in type_literals:
+                return typed_value
+        return None
+    return caster
 
 
-# Untyped coercion - allow casting to bools and ints only
-def unknown_caster(value: str) -> Union[bool, int, str]:
+def untyped_caster(value: str) -> Any:
     if value in ['true', 'false']:
         return value == 'true'
     if value.isdecimal():
@@ -166,7 +188,73 @@ def unknown_caster(value: str) -> Union[bool, int, str]:
     return value
 
 
-def get_typehint_name(typehint: Type) -> str:
+def map_typehint(typehint: TypeHint) -> TypeMap:
+    typehint_map: TypeMap = {}
+    origin = get_origin(typehint)
+    type_args = get_args(typehint)
+    if origin is None:
+        typehint_map[typehint] = origin
+    elif origin in (Union, UnionType):
+        for arg in type_args:
+            typehint_map.update(map_typehint(arg))
+    else:
+        child_map: TypeMap = {}
+        for arg in get_args(typehint):
+            child_map.update(map_typehint(arg))
+        typehint_map[origin] = child_map or None
+    return typehint_map
+
+
+def istype(typehint: TypeHint, comparetypes: TypeHintTuple) -> bool:
+    if not isinstance(comparetypes, Collection):
+        comparetypes = (comparetypes,)
+    type_map = map_typehint(typehint)
+    primary_types = type_map.keys()
+    if set(primary_types).intersection(comparetypes):
+        return True
+    return False
+
+
+def issubtype(typehint: TypeHint, comparetypes: TypeHintTuple) -> bool:
+    if not isinstance(comparetypes, tuple):
+        comparetypes = (comparetypes,)
+    type_map = map_typehint(typehint)
+    primary_types = type_map.keys()
+    for _type in primary_types:
+        try:
+            if issubclass(_type, comparetypes):
+                return True
+        except TypeError:
+            pass
+    return False
+
+
+def containstype(typehint: TypeHint, comparetypes: TypeHintTuple) -> bool:
+    def _containstype(type_map: TypeMap, comparetypes: TypeHintTuple) -> bool:
+        for key, value in type_map.items():
+            if key in comparetypes:
+                return True
+            if value is None:
+                continue
+            if _containstype(value, comparetypes):
+                return True
+        return False
+    if not isinstance(comparetypes, Collection):
+        comparetypes = (comparetypes,)
+    type_map = map_typehint(typehint)
+    return _containstype(type_map, comparetypes)
+
+
+def isunion(typehint: TypeHint) -> bool:
+    type_map = map_typehint(typehint)
+    return len(type_map) > 1
+
+
+def istextio(typehint: TypeHint) -> bool:
+    return containstype(typehint, (TextIO, TextIOWrapper))
+
+
+def get_typehint_name(typehint: TypeHint) -> str:
     if isunion(typehint):
         names = []
         type_args = get_args(typehint)
@@ -195,7 +283,7 @@ def cast_to_shell(value: Any) -> Tuple[str, str]:
     elif isinstance(value, int):
         typedef = "-i"
         value = str(value)
-    elif isarray(value):
+    elif isinstance(value, (tuple, list, set)):
         shell_array = [cast_to_shell(v)[0] for v in value]
         value = f'({" ".join(shell_array)})'
         typedef = '-a'
@@ -208,37 +296,3 @@ def cast_to_shell(value: Any) -> Tuple[str, str]:
     else:
         value = f'"{value}"'
     return value, typedef
-
-
-def isprimitive(obj: Any) -> bool:
-    return isinstance(obj, (int, float, bool, str))
-
-
-def iscollection(obj: Any) -> bool:
-    return isinstance(obj, (tuple, list, set, dict))
-
-
-def isarray(obj: Any) -> bool:
-    return isinstance(obj, (tuple, list, set))
-
-
-def isunion(typehint: Type) -> bool:
-    origin = get_origin(typehint)
-    return origin in (Union, UnionType)
-
-
-def islist(typehint: Type) -> bool:
-    origin = get_origin(typehint)
-    if list in (typehint, origin):
-        return True
-    if isunion(typehint):
-        return any(islist(a) for a in get_args(typehint))
-    return False
-
-
-def istextio(typehint: Type) -> bool:
-    textio_types = {TextIO, TextIOWrapper}
-    if typehint in textio_types:
-        return True
-    type_args = get_args(typehint)
-    return islist(typehint) and len(textio_types.intersection(type_args)) > 0
