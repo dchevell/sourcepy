@@ -115,6 +115,8 @@ def test_cast_to_type(monkeypatch, value, type_hint, strict, expected_result):
         # file / stdin
         (t.TextIO, 'file / stdin'),
         (io.TextIOWrapper, 'file / stdin'),
+        (t.List[t.TextIO], 'file(s) / stdin'),
+        (tuple[io.TextIOWrapper], 'file(s) / stdin'),
 
         # Union types
         (t.Optional[int], 'int'),

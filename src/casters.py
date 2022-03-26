@@ -267,10 +267,11 @@ def get_typehint_name(typehint: TypeHint) -> str:
     origin = get_origin(typehint)
     if origin is Literal:
         return str(get_args(typehint))[1:-1]
+    if istextio(typehint):
+        name = 'file(s)' if issubtype(typehint, Collection) else 'file'
+        return f'{name} / stdin'
     if origin is not None:
         return get_typehint_name(origin)
-    if typehint in (TextIO, TextIOWrapper):
-        return 'file / stdin'
     if hasattr(typehint, '__name__'):
         return typehint.__name__
     return str(typehint)
