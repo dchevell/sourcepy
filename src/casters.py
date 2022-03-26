@@ -5,7 +5,7 @@ import sys
 
 from collections.abc import Callable, Collection
 from datetime import date, datetime, time
-from io import TextIOWrapper
+from io import TextIOBase
 from pathlib import Path
 from re import Pattern
 from typing import (
@@ -59,7 +59,7 @@ def get_caster(typehint: TypeHint) -> Callable[[Any], Any]:
         (Collection,):             collection_caster(typehint),
         (date, time):              datetime_caster(typehint),
         (Pattern,):                pattern_caster,
-        (TextIO, TextIOWrapper):   textio_caster,
+        (TextIO, TextIOBase):   textio_caster,
         (Literal,):                literal_caster(typehint),
     }
     for cls, caster in typecasters.items():
@@ -232,7 +232,7 @@ def issubtype(typehint: TypeHint, comparetypes: TypeHintTuple) -> bool:
 def containstype(typehint: TypeHint, comparetypes: TypeHintTuple) -> bool:
     def _containstype(type_map: TypeMap, comparetypes: TypeHintTuple) -> bool:
         for key, value in type_map.items():
-            if key in comparetypes:
+            if issubtype(key, comparetypes):
                 return True
             if value is None:
                 continue
@@ -251,7 +251,7 @@ def isunion(typehint: TypeHint) -> bool:
 
 
 def istextio(typehint: TypeHint) -> bool:
-    return containstype(typehint, (TextIO, TextIOWrapper))
+    return containstype(typehint, (TextIO, TextIOBase))
 
 
 def get_typehint_name(typehint: TypeHint) -> str:
