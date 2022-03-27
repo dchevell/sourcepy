@@ -4,7 +4,6 @@ import sys
 import textwrap
 
 from pathlib import Path
-from typing import Any
 
 from casters import cast_to_shell
 from loaders import load_path, module_definitions
@@ -15,7 +14,7 @@ SOURCEPY_HOME = Path(os.environ.get('SOURCEPY_HOME', Path.home() / '.sourcepy'))
 SOURCEPY_BIN = Path(__file__).resolve().parent
 
 
-def make_var(name: str, value: Any) -> str:
+def make_var(name: str, value: object) -> str:
     value, typedef = cast_to_shell(value)
     var_def = textwrap.dedent(f"""\
         declare {('-x ' + typedef).strip()} {name}

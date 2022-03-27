@@ -64,12 +64,41 @@ Sourcepy provides a number of features to bridge the gap between Python and
 shell semantics to give you the full power and flexibility of your Python
 functions natively from your shell.
 
-* Function parameters are automatically converted into command line options
-* Type hints can be used to coerce command line arguments into their
+### Dynamically generated argument parsing
+
+Function parameters are automatically converted into command line options.
+Sourcepy supports positional only arguments, positional or keyword arguments and
+keyword only arguments, and implements specialised handling for each type.
+Where python requires specific ordering for positional arguments vs keyword
+arguments, shell programs often allow these to be intermixed.
+
+### Type handling
+
+Type hints can be used to coerce command line arguments into their
 corresponding types
-* Data can be passed to functions from stdin, either implicitly or explicitly
+
+### IO
+
+Sourcepy allows implicit support for stdin for any function without requiring
+explicit annotations, and will read and pass text stream data to the first
+non-keyword-only parameter. Explicitly supplying IO typehints (e.g.
+`typing.TextIO`, `typing.IO[bytes]`, `io.TextIOBase`, etc.) allows for
+supporting some advanced features:
+* File paths passed as function arguments are converted into open file handles.
+  Function calls are wrapped inside a context manager that safely opens and
+  closes file handles outside of the lifecycle of the function.
+* Text and binary data are both supported, using the appropriate types from the
+  `typing` or `io` modules.
+* When an IO typehint is supplied, stdin will be routed to that argument instead
+  of the first whenever a tty is not detected. If multiple typehints have IO
+  annotations the first one will be selected.
+* IO type annotations can be wrapped in Sequence or Set containers, e.g.
+  `list[typing.IO[str]]` or `tuple[typing.TextIO, typing.BinaryIO]`. If stdin
+  targets an IO type inside a container, only a single item container will be
+  supplied (note that the tuple example here would fail in this scenario).
+
 * Positional, positional-or-keyword, and keyword-only args are natively
-supported
+  supported
 
 
 ## Requirements
@@ -118,7 +147,7 @@ multiply: error: invalid literal for <class 'int'>: a
 ```
 ```python
 # demo.py
-def fileexists(file: Path):
+def fileexists(file: Path) -> bool:
     """Values will be converted into Path objects. Booleans
     will be converted to shell equivalents (lowercase)"""
     return file.exists()
@@ -138,15 +167,15 @@ an object and overriding `__new__`
 
 ```python
 # pagetitle.py
-import lxml.html # requires lxml to be installed
+from lxml.html import HtmlElement, fromstring as htmlfromstring
 
 __all__ = ['pagetitle']
 
-class HTML(lxml.html.HtmlElement):
-    def __new__(cls, html_string, *args, **kwargs):
-        return lxml.html.fromstring(html_string)
+class HTML(HtmlElement):
+    def __new__(cls, html_string, *args, **kwargs) -> HtmlElement:
+        return htmlfromstring(html_string)
 
-def pagetitle(html: HTML):
+def pagetitle(html: HTML) -> str:
     return html.find('.//title').text
 ```
 ```shell

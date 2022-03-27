@@ -1,6 +1,4 @@
-# demo.py
-
-def stdout_stderr():
+def stdout_stderr() -> str:
     """Sourcepy redirects all output from sourced files to stderr.
     Return values are printed to stdout. This is helpful when running
     functions from the shell and assigning them to a variable:
@@ -22,7 +20,7 @@ def multiply(a: int, b: int) -> int:
 
 from pathlib import Path
 
-def fileexists(file: Path):
+def fileexists(file: Path) -> bool:
     """Values will be converted into Path objects. Booleans
     will be converted to shell equivalents (lowercase)"""
     return file.exists()

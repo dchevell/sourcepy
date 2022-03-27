@@ -6,13 +6,14 @@ import sys
 from argparse import Action, _ArgumentGroup as ArgumentGroup
 from collections.abc import Callable, ValuesView
 from inspect import Parameter
-from pathlib import Path
 from typing import (
-    Any, Dict, IO, Iterator, List, Literal, Optional,
-    Tuple, Type, TypedDict, Union, get_args, get_origin
+    Any, Dict, Iterator, List, Literal, Optional, Tuple, Type, TypedDict, Union,
+    get_args, get_origin
 )
 
-from casters import cast_to_type, issubtype, isio, istextio, get_typehint_name
+from casters import (
+    cast_to_type, iscontainer, isio, issubtype, get_typehint_name
+)
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -24,17 +25,15 @@ else:
 
 STDIN = '==STDIN==' # placeholder for stdin
 
-Mode = Literal['r', 'rb', 'w', 'wb']
-FileHandles = Union[IO[Any], List[IO[Any]]]
-FilePaths = Union[Path, List[Path]]
 NumArgs = Optional[Union[int, Literal['*']]]
 OptionsAction = Optional[Union[str, Type[Action]]]
 OptionsNargs = Optional[Union[int, str]]
 ParamsList = Union[List[Parameter], ValuesView[Parameter]]
 ParserContextManager = Iterator[Tuple[Tuple[Any, ...], Dict[str, Any]]]
+ParserReturn = Union[bool, str, List[str]]
 
 
-class ArgOptions(TypedDict, total=False):
+class _ArgOptions(TypedDict, total=False):
     default: str
     action: Union[str, Type[Action]]
     choices: List[Any]
@@ -43,7 +42,10 @@ class ArgOptions(TypedDict, total=False):
     help: str
 
 
-class MoreIndentFormatter(argparse.RawTextHelpFormatter):
+class WideFormatter(argparse.RawTextHelpFormatter):
+    """Argparse help text formatter with a higher default indent
+    position to make more room for positional-or-kwarg options text.
+    """
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if 'max_help_position' not in kwargs:
             kwargs['max_help_position'] = 36
@@ -51,14 +53,17 @@ class MoreIndentFormatter(argparse.RawTextHelpFormatter):
 
 
 class FunctionParameterParser(argparse.ArgumentParser):
-
-    def __init__(self, fn: Callable[[Any], Any], /, *args: Any, **kwargs: Any) -> None:
+    """A dynamic argument parser that generates arguments from
+    a specified function and handles casting values to their
+    annotated types.
+    """
+    def __init__(self, fn: Callable[..., object], /, *args: Any, **kwargs: Any) -> None:
         if 'prog' not in kwargs:
             kwargs['prog'] = fn.__name__
         if 'description' not in kwargs:
             kwargs['description'] = inspect.getdoc(fn)
         if 'formatter_class' not in kwargs:
-            kwargs['formatter_class'] = MoreIndentFormatter
+            kwargs['formatter_class'] = WideFormatter
         super().__init__(*args, **kwargs)
         self.params = inspect.signature(fn).parameters.values()
         self.groups: Dict[str, ArgumentGroup] = {}
@@ -87,7 +92,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 name = param.name
             else:
                 name = '--' + param.name.replace('_', '-')
-            options: ArgOptions = {}
+            options: _ArgOptions = {}
             if default := self.options_default(param):
                 options['default'] = default
             if action := self.options_action(param):
@@ -169,10 +174,8 @@ class FunctionParameterParser(argparse.ArgumentParser):
             except (ValueError, TypeError) as e:
                 self.error(str(e))
             if isio(param.annotation) and sys.stdin.isatty():
-                mode: Mode = 'r' if istextio(param.annotation) else 'rb'
-                value = open_file_args(value, mode=mode)
-                open_handles.extend(value if isinstance(value, list) else [value])
-
+                handles = value if iscontainer(type(value)) else [value]
+                open_handles.extend(handles)
             if param not in positional_only(self.params):
                 kwargs[param.name] = value
             elif param is stdin_target(self.params):
@@ -187,7 +190,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
             for handle in open_handles:
                 handle.close()
 
-    def parse_ambiguous_args(self, raw_args: List[str]) -> Dict[str, Any]:
+    def parse_ambiguous_args(self, raw_args: List[str]) -> Dict[str, ParserReturn]:
         known, unknown = self.parse_known_args(raw_args)
         parsed = vars(known)
         # pos_or_kw args passed as positional args will end up in "unknown"
@@ -215,8 +218,8 @@ class FunctionParameterParser(argparse.ArgumentParser):
             self.error(f"unrecognised arguments: {' '.join(unknown)}")
         return parsed
 
-    def typecaster(self, value: Any, param: Parameter) -> Any:
-        if not isinstance(value, (str, list)):
+    def typecaster(self, value: ParserReturn, param: Parameter) -> Any:
+        if isinstance(value, bool):
             return value
         typehint = get_typehint(param)
         strict = typehint is param.annotation
@@ -279,15 +282,9 @@ def get_nargs(param: Parameter) -> NumArgs:
     return None
 
 
-def get_typehint(param: Parameter) -> Type[Any]:
+def get_typehint(param: Parameter) -> object:
     if param.annotation not in(param.empty, Any):
         return param.annotation
     if param.default is not param.empty:
         return type(param.default)
     return param.empty
-
-
-def open_file_args(value: FilePaths, mode: Mode = 'r') -> FileHandles:
-    if isinstance(value, list):
-        return [v.open(mode=mode) for v in value]
-    return value.open(mode=mode)

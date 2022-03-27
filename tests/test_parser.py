@@ -330,3 +330,17 @@ def test_parser_nargs_stdin(stdin_arg, cmd_args, expected_result, monkeypatch):
     else:
         with parser.parse_fn_args(cmd_args) as (args, kwargs):
             assert expected_result == myfn(*args, **kwargs)
+
+
+@pytest.mark.filterwarnings('error::ResourceWarning')
+@pytest.mark.filterwarnings('error::pytest.PytestUnraisableExceptionWarning')
+def test_parser_close_open_files(monkeypatch):
+
+    def myfn(one: TextIO):
+        return one
+
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    parser = FunctionParameterParser(myfn)
+
+    with parser.parse_fn_args(['/dev/null']) as (args, kwargs):
+        myfn(*args, **kwargs)

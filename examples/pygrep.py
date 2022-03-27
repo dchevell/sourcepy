@@ -1,11 +1,11 @@
-"""Pygrep is a minimal grep implementation that illustrates a number of
+"""pygrep is a minimal grep implementation that illustrates a number of
 interesting Sourcepy features.
 
 Note that aside from declaring its argument types accurately the
 `pygrep` function contains no special implementation details related to
 Sourcepy. As presented below, it's a plain python function that expects
-to receive a re.Pattern object and a list of file handles / (TextIO text
-streams, specifically)
+to receive a re.Pattern object and a list of file handles / IO text
+streams.
 
 Type annotations
 
@@ -18,9 +18,9 @@ Type annotations
         re.Pattern
             The command line argument passed for this value will be
             compiled into a re.Pattern object.
-            Note: re.Pattern[str/bytes], typing.Pattern,
-            typing.Pattern[str/bytes] are also supported (typing.Pattern
-            is deprecated in Python 3.10)
+            Note: re.Pattern[str/bytes], typing.Pattern, and
+            typing.Pattern[str/bytes] are also supported, although
+            typing.Pattern is deprecated in Python 3.10).
 
         list[typing.TextIO]
             Command line arguments passed for this value will be checked
@@ -31,8 +31,8 @@ Type annotations
             Sourcepy will wrap the function call inside a context
             manager that opens and closes file handles is handled
             automatically.
-            Note: typing.IO[str], io.TextIOBase, io.TextIOWrapper are
-            also supported, as are their binary equivalents.
+            Note: typing.IO[str], io.TextIOBase, and io.TextIOWrapper
+            are also supported, as are their binary/bytes equivalents.
 
     Return types of functions can generally be inferred automatically,
     and the type annotations supplied for the `_highlight` helper
@@ -57,15 +57,16 @@ Parameter kinds
     (e.g. passing a value for param_name as a keyword argument would
     require setting `--param-name value` or `--param-name=value` in the
     shell). Positional or keyword arguments can be specified in either
-    fashion and Sourcepy will reconcile these as needed. Note: whilst
-    Python does not allow keyword arguments to be specified in front of
-    positional arguments, shell programs generally do allow this and
-    Sourcepy allows for this as well to provide semantically correct
-    behaviour in the shell. This can create some ambiguous cases where
-    multiple list types are involved. These are difficult to detect and
-    exhaustive coverage of edge cases is not possible. Sourcepy will not
-    prevent the usage of such functions and avoiding problematic
-    function signatures is left as an exercise to the reader.
+    fashion and Sourcepy will reconcile these as needed.
+    Note: whilst Python does not allow keyword arguments to be specified
+    in front of positional arguments, shell programs generally do allow
+    this and Sourcepy allows for this as well to provide semantically
+    correct behaviour in the shell. This can create some ambiguous cases
+    where multiple list types are involved. These are difficult to
+    detect and exhaustive coverage of edge cases is not possible.
+    Sourcepy will not prevent the usage of such functions and avoiding
+    problematic function signatures is left as an exercise to the
+    reader.
 
 Help
 
@@ -75,14 +76,17 @@ Help
         Description
             If the function contains a docstring this will be printed at
             the beginning of the help message.
+
         Parameter kinds:
             If parameters have been specified as positional only or
             keyword only, they will be listed as separate arguments
             groups.
+
         Defaults
             If a parameter contains a default value, this will be printed in the
             option help text. If no default value exists, that option will be
             noted as required.
+
         Types
             Parameters annotated with type hints will show a readable text string
             next to their option help text showing the acceptable type(s).

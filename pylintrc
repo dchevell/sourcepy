@@ -87,9 +87,7 @@ disable=raw-checker-failed,
         deprecated-pragma,
         use-symbolic-message-instead,
         missing-module-docstring,
-        missing-class-docstring,
         missing-function-docstring,
-        protected-access
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -212,7 +210,7 @@ ignore-on-opaque-inference=yes
 # List of class names for which member attributes should not be checked (useful
 # for classes with dynamically set attributes). This supports the use of
 # qualified names.
-ignored-classes=optparse.Values,thread._local,_thread._local
+ignored-classes=optparse.Values,thread._local,_thread._local,typing.TypedDict,ArgOptions
 
 # List of module names for which member attributes should not be checked
 # (useful for modules/projects where namespaces are manipulated during runtime
@@ -397,6 +395,7 @@ good-names=i,                       # counter
            ex,                      # exception
            fn,                      # function
            BooleanOptionalAction,   # special backward compat fallback
+           T,                       # TypeVar
            _
 
 # Good variable names regexes, separated by a comma. If names match any regex,

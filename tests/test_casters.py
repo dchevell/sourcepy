@@ -85,8 +85,8 @@ from casters import cast_to_type, get_typehint_name
     ('04:23:01.000384', None, False, '04:23:01.000384'),
 
     # TextIO stream from file
-    ('/dev/null', t.TextIO, True, p.Path),
-    ('/dev/null', io.TextIOWrapper, True, p.Path),
+    ('/dev/null', t.TextIO, True, io.TextIOBase),
+    ('/dev/null', t.BinaryIO, True, io.BufferedIOBase),
 ))
 def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
@@ -95,7 +95,7 @@ def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
             cast_to_type(value, typehint, strict=strict)
     elif isinstance(expected_result, type):
         result = cast_to_type(value, typehint, strict=strict)
-        assert type(result) in (p.Path, p.PosixPath)
+        assert issubclass(type(result), expected_result)
     else:
         result = cast_to_type(value, typehint, strict=strict)
         assert result == expected_result
