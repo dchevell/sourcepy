@@ -8,11 +8,11 @@ from collections.abc import Callable, ValuesView
 from inspect import Parameter
 from pathlib import Path
 from typing import (
-    Any, Dict, Iterator, List, Literal, Optional, TextIO,
+    Any, Dict, IO, Iterator, List, Literal, Optional,
     Tuple, Type, TypedDict, Union, get_args, get_origin
 )
 
-from casters import cast_to_type, issubtype, istextio, get_typehint_name
+from casters import cast_to_type, issubtype, isio, istextio, get_typehint_name
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -24,7 +24,8 @@ else:
 
 STDIN = '==STDIN==' # placeholder for stdin
 
-FileHandles = Union[TextIO, List[TextIO]]
+Mode = Literal['r', 'rb', 'w', 'wb']
+FileHandles = Union[IO[Any], List[IO[Any]]]
 FilePaths = Union[Path, List[Path]]
 NumArgs = Optional[Union[int, Literal['*']]]
 OptionsAction = Optional[Union[str, Type[Action]]]
@@ -42,6 +43,13 @@ class ArgOptions(TypedDict, total=False):
     help: str
 
 
+class MoreIndentFormatter(argparse.RawTextHelpFormatter):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if 'max_help_position' not in kwargs:
+            kwargs['max_help_position'] = 36
+        super().__init__(*args, **kwargs)
+
+
 class FunctionParameterParser(argparse.ArgumentParser):
 
     def __init__(self, fn: Callable[[Any], Any], /, *args: Any, **kwargs: Any) -> None:
@@ -49,6 +57,8 @@ class FunctionParameterParser(argparse.ArgumentParser):
             kwargs['prog'] = fn.__name__
         if 'description' not in kwargs:
             kwargs['description'] = inspect.getdoc(fn)
+        if 'formatter_class' not in kwargs:
+            kwargs['formatter_class'] = MoreIndentFormatter
         super().__init__(*args, **kwargs)
         self.params = inspect.signature(fn).parameters.values()
         self.groups: Dict[str, ArgumentGroup] = {}
@@ -158,8 +168,9 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 value = self.typecaster(parsed[param.name], param)
             except (ValueError, TypeError) as e:
                 self.error(str(e))
-            if istextio(param.annotation) and sys.stdin.isatty():
-                value = open_file_args(value)
+            if isio(param.annotation) and sys.stdin.isatty():
+                mode: Mode = 'r' if istextio(param.annotation) else 'rb'
+                value = open_file_args(value, mode=mode)
                 open_handles.extend(value if isinstance(value, list) else [value])
 
             if param not in positional_only(self.params):
@@ -210,7 +221,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
         typehint = get_typehint(param)
         strict = typehint is param.annotation
         implicit_stdin = None
-        if param is stdin_target(self.params) and not istextio(typehint):
+        if param is stdin_target(self.params) and not isio(typehint):
             implicit_stdin = sys.stdin.read().rstrip()
         if implicit_stdin is not None:
             value = implicit_stdin
@@ -237,7 +248,7 @@ def stdin_target(params: ParamsList) -> Optional[Parameter]:
     for param in params:
         if sys.stdin.isatty():
             return None
-        if istextio(param.annotation):
+        if isio(param.annotation):
             return param
     if len(params) == len(keyword_only(params)):
         return None
@@ -276,7 +287,7 @@ def get_typehint(param: Parameter) -> Type[Any]:
     return param.empty
 
 
-def open_file_args(value: FilePaths) -> FileHandles:
+def open_file_args(value: FilePaths, mode: Mode = 'r') -> FileHandles:
     if isinstance(value, list):
-        return [v.open() for v in value]
-    return value.open()
+        return [v.open(mode=mode) for v in value]
+    return value.open(mode=mode)

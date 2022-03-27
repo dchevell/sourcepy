@@ -27,9 +27,11 @@ def print_result(result: Any) -> None:
             print_result(line)
         return
     write = sys.__stdout__.write
-    out = str(result) + '\n'
+    out = str(result)
     if isinstance(result, bool):
         out = out.lower()
+    if not out.endswith('\n'):
+        out += '\n'
     write(out)
 
 

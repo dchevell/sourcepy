@@ -5,11 +5,11 @@ import sys
 
 from collections.abc import Callable, Collection
 from datetime import date, datetime, time
-from io import TextIOBase
+from io import IOBase, TextIOBase
 from pathlib import Path
 from re import Pattern
 from typing import (
-    Any, Dict, List, Literal, Optional, TextIO, Tuple, Type, Union,
+    Any, Dict, IO, List, Literal, Optional, Sequence, Set, TextIO, Tuple, Type, Union,
     get_args, get_origin
 )
 from typing import _Final as TypingBase # type: ignore[attr-defined]
@@ -53,14 +53,15 @@ def get_caster(typehint: TypeHint) -> Callable[[Any], Any]:
     if origin in (Union, UnionType):
         return union_caster(typehint)
     typecasters: Dict[TypeHintTuple, Callable[[Any], Any]] = {
-        (str, bytes):              generic_caster(typehint),
-        (dict,):                   json_caster(typehint),
-        (bool,):                   bool_caster,
-        (Collection,):             collection_caster(typehint),
-        (date, time):              datetime_caster(typehint),
-        (Pattern,):                pattern_caster,
-        (TextIO, TextIOBase):   textio_caster,
-        (Literal,):                literal_caster(typehint),
+        (str,):                     str,
+        (bytes,):                   str.encode,
+        (dict,):                    json_caster(typehint),
+        (bool,):                    bool_caster,
+        (Sequence, Set):            collection_caster(typehint),
+        (date, time):               datetime_caster(typehint),
+        (Pattern,):                 pattern_caster(typehint),
+        (IO, IOBase):               io_caster(typehint),
+        (Literal,):                 literal_caster(typehint),
     }
     for cls, caster in typecasters.items():
         if typehint in cls:
@@ -94,6 +95,11 @@ def union_caster(typehint: TypeHint) -> Callable[[Any], Any]:
 
 
 def generic_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    """If we don't know how to handle a type, try calling it with a
+    single argument constructor. If it fails, return the original string
+    value rather than failing - we should fail with ValueErrors when the
+    value is known not to match the expected type, not when we don't
+    know how to handle a type. """
     def caster(value: str) -> Any:
         try:
             return typehint(value)
@@ -153,17 +159,25 @@ def datetime_caster(typehint: TypeHint) -> Callable[[Any], Any]:
     return caster
 
 
-def pattern_caster(value: str) -> Any:
-    return re.compile(value)
+def pattern_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    def caster(value: str) -> Any:
+        if member_types := get_args(typehint):
+            value = cast_to_type(value, member_types[0], strict=True)
+        return re.compile(value)
+    return caster
 
 
-def textio_caster(value: str) -> Any:
-    if not sys.stdin.isatty():
-        return sys.stdin
-    file = Path(value)
-    if not file.exists():
-        raise ValueError(f"no such file or directory: {value}")
-    return file
+def io_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+    def caster(value: str) -> Any:
+        if not sys.stdin.isatty():
+            if istextio(typehint):
+                return sys.stdin
+            return sys.stdin.buffer
+        file = Path(value)
+        if not file.exists():
+            raise ValueError(f"no such file or directory: {value}")
+        return file
+    return caster
 
 
 def literal_caster(typehint: TypeHint) -> Callable[[Any], Any]:
@@ -250,8 +264,14 @@ def isunion(typehint: TypeHint) -> bool:
     return len(type_map) > 1
 
 
+def isio(typehint: TypeHint) -> bool:
+    return containstype(typehint, (IO, IOBase))
+
+
 def istextio(typehint: TypeHint) -> bool:
-    return containstype(typehint, (TextIO, TextIOBase))
+    if not isio(typehint):
+        return False
+    return containstype(typehint, (TextIO, TextIOBase, str))
 
 
 def get_typehint_name(typehint: TypeHint) -> str:
@@ -267,7 +287,7 @@ def get_typehint_name(typehint: TypeHint) -> str:
     origin = get_origin(typehint)
     if origin is Literal:
         return str(get_args(typehint))[1:-1]
-    if istextio(typehint):
+    if isio(typehint):
         name = 'file(s)' if issubtype(typehint, Collection) else 'file'
         return f'{name} / stdin'
     if origin is not None:
