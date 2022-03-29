@@ -13,7 +13,7 @@ def run_from_stub(module_path: Path, fn_string: str, raw_args: List[str]) -> Non
     with contextlib.redirect_stdout(sys.stderr):
         module = load_path(module_path)
         fn = get_callable(module, fn_string)
-        parser = FunctionParameterParser(fn)
+        parser = FunctionParameterParser(fn, fn_string)
         with parser.parse_fn_args(raw_args) as (args, kwargs):
             result = fn(*args, **kwargs)
             print_result(result)

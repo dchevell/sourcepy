@@ -57,14 +57,15 @@ class FunctionParameterParser(argparse.ArgumentParser):
     a specified function and handles casting values to their
     annotated types.
     """
-    def __init__(self, fn: Callable[..., object], /, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, fn: Callable[..., object], /, fn_string: Optional[str] = None,
+                 **kwargs: Any) -> None:
         if 'prog' not in kwargs:
-            kwargs['prog'] = fn.__name__
+            kwargs['prog'] = fn_string or fn.__name__
         if 'description' not in kwargs:
             kwargs['description'] = inspect.getdoc(fn)
         if 'formatter_class' not in kwargs:
             kwargs['formatter_class'] = WideFormatter
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
         self.params = inspect.signature(fn).parameters.values()
         self.groups: Dict[str, ArgumentGroup] = {}
         self.generate_args()

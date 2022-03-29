@@ -60,7 +60,7 @@ def member_definitions(members: Members, parent: Optional[str] = None) -> Member
         elif isprimitive(value) or iscollection(value):
             yield {'type': 'variable', 'name': name, 'value': value}
         elif getattr(value, '__dict__', {}):
-            yield from member_definitions([(name, inspect.getmembers(value))])
+            yield from member_definitions([(name, vars(value))])
         if methods := inspect.getmembers(value, inspect.ismethod):
             yield from member_definitions(methods, parent=name)
 

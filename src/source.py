@@ -41,11 +41,11 @@ def make_runner(runner_name: str, module_path: Path) -> str:
     return runner
 
 
-def escape(path: Path) -> str:
-    escaped = str(path)
+def escape_name(path: Path) -> str:
+    escaped = '_'.join(path.parts)
     for char in '. /':
         escaped = escaped.replace(char, '_')
-    return escaped
+    return escaped + '.sh'
 
 
 def build_stub(module_path: Path) -> str:
@@ -91,7 +91,7 @@ def main() -> None:
     with contextlib.redirect_stdout(sys.stderr):
         module_path = Path(sys.argv[1]).resolve()
         stub_contents = build_stub(module_path)
-        stub_name = escape(module_path) + '.sh'
+        stub_name = escape_name(module_path)
         stub_file = write_stub_file(stub_contents, stub_name)
     print(stub_file)
 
