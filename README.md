@@ -17,7 +17,7 @@ from typing import TextIO
 def pygrep(pattern: Pattern, grepdata: list[TextIO]):
     """
     A minimal grep implementation in Python
-    illustrating some of Sourcepy's features.
+    illustrating some interesting Sourcepy features.
     """
     for file in grepdata:
         prefix = f'{file.name}:' if len(grepdata) > 1 else ''
@@ -32,8 +32,8 @@ $ pygrep "implementation" pygrep.py
 $ pygrep --help
 usage: pygrep [-h] [--pattern / pattern] [--grepdata [/ grepdata ...]]
 
-A minimal grep implementation in python that illustrates some
-interesting Sourcepy features
+    A minimal grep implementation in Python
+    illustrating some interesting Sourcepy features.
 
 options:
   -h, --help                   show this help message and exit
