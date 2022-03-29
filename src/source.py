@@ -4,7 +4,6 @@ import sys
 import textwrap
 
 from pathlib import Path
-from typing import Any
 
 from casters import cast_to_shell
 from loaders import load_path, module_definitions
@@ -15,7 +14,7 @@ SOURCEPY_HOME = Path(os.environ.get('SOURCEPY_HOME', Path.home() / '.sourcepy'))
 SOURCEPY_BIN = Path(__file__).resolve().parent
 
 
-def make_var(name: str, value: Any) -> str:
+def make_var(name: str, value: object) -> str:
     value, typedef = cast_to_shell(value)
     var_def = textwrap.dedent(f"""\
         declare {('-x ' + typedef).strip()} {name}
@@ -42,11 +41,15 @@ def make_runner(runner_name: str, module_path: Path) -> str:
     return runner
 
 
-def escape(path: Path) -> str:
-    escaped = str(path)
+def make_stub_name(path: Path) -> str:
+    """Return an escaped filename to be used in source stubs.
+    Reverses the order of parts from the original filepath for
+    easier readability
+    """
+    escaped = '_'.join(reversed(path.parts))
     for char in '. /':
         escaped = escaped.replace(char, '_')
-    return escaped
+    return escaped + '.sh'
 
 
 def build_stub(module_path: Path) -> str:
@@ -92,7 +95,7 @@ def main() -> None:
     with contextlib.redirect_stdout(sys.stderr):
         module_path = Path(sys.argv[1]).resolve()
         stub_contents = build_stub(module_path)
-        stub_name = escape(module_path) + '.sh'
+        stub_name = make_stub_name(module_path)
         stub_file = write_stub_file(stub_contents, stub_name)
     print(stub_file)
 

@@ -5,12 +5,12 @@ import sys
 
 from collections.abc import Callable, Collection
 from datetime import date, datetime, time
-from io import TextIOWrapper
+from io import IOBase, TextIOBase
 from pathlib import Path
 from re import Pattern
 from typing import (
-    Any, Dict, List, Literal, Optional, TextIO, Tuple, Type, Union,
-    get_args, get_origin
+    Any, Dict, IO, List, Literal, Optional, Sequence, Set, TextIO, Tuple, Type, TypeVar,
+    Union, get_args, get_origin
 )
 from typing import _Final as TypingBase # type: ignore[attr-defined]
 
@@ -21,27 +21,37 @@ else:
 
 
 
-RawStringList = Union[str, List[str]]
+T = TypeVar('T')
+StringUnion = Union[str, List[str]]
+CollectionReturn = Optional[Collection[Any]]
+DateTimeReturn = Union[date, datetime, time]
+IOReturn = Union[IO[str], IO[bytes]]
+JSONReturn = Optional[Union[Dict[str, Any], List[Any]]]
+PatternReturn = Union[Pattern[str], Pattern[bytes]]
+
 TypeHint = Union[Type[Any], TypingBase]
 TypeHintTuple = Union[TypeHint, Tuple[TypeHint]]
 TypeMap = Dict[Type[Any], Optional[Dict[Type[Any], Any]]]
 
+IOMode = Literal['r', 'rb', 'w', 'wb']
 
-def cast_to_type(value: RawStringList, typehint: Optional[TypeHint] = None, *,
+
+def cast_to_type(value: StringUnion, typehint: Optional[TypeHint] = None, *,
                  strict: bool = False) -> Any:
     typecaster = get_caster(typehint)
+    name = get_typehint_name(typehint)
     try:
         typed_value = typecaster(value)
         if typed_value is None:
-            raise ValueError(f"invalid literal for {typehint}: {value}")
+            raise ValueError(f"invalid literal for {name}: {value}")
         return typed_value
     except (TypeError, ValueError) as e:
         if strict:
-            raise ValueError(f"invalid literal for {typehint}: {value}") from e
+            raise ValueError(f"invalid literal for {name}: {value}") from e
         return value
 
 
-def get_caster(typehint: TypeHint) -> Callable[[Any], Any]:
+def get_caster(typehint: TypeHint) -> Callable[..., Any]:
     """Returns a conversion class most appropriate for the
     supplied type hint. Potential matches are checked in
     order from most to least specific to account for
@@ -52,15 +62,16 @@ def get_caster(typehint: TypeHint) -> Callable[[Any], Any]:
     origin = get_origin(typehint)
     if origin in (Union, UnionType):
         return union_caster(typehint)
-    typecasters: Dict[TypeHintTuple, Callable[[Any], Any]] = {
-        (str, bytes):              generic_caster(typehint),
-        (dict,):                   json_caster(typehint),
-        (bool,):                   bool_caster,
-        (Collection,):             collection_caster(typehint),
-        (date, time):              datetime_caster(typehint),
-        (Pattern,):                pattern_caster,
-        (TextIO, TextIOWrapper):   textio_caster,
-        (Literal,):                literal_caster(typehint),
+    typecasters: Dict[TypeHintTuple, Callable[..., Any]] = {
+        (str,):                     str,
+        (bytes,):                   str.encode,
+        (dict,):                    json_caster(typehint),
+        (bool,):                    bool_caster,
+        (Sequence, Set):            collection_caster(typehint),
+        (date, time):               datetime_caster(typehint),
+        (Pattern,):                 pattern_caster(typehint),
+        (IO, IOBase):               io_caster(typehint),
+        (Literal,):                 literal_caster(typehint),
     }
     for cls, caster in typecasters.items():
         if typehint in cls:
@@ -72,8 +83,8 @@ def get_caster(typehint: TypeHint) -> Callable[[Any], Any]:
     return generic_caster(typehint)
 
 
-def union_caster(typehint: TypeHint) -> Callable[[Any], Any]:
-    def caster(value: RawStringList) -> Any:
+def union_caster(typehint: TypeHint) -> Callable[[StringUnion], Optional[T]]:
+    def caster(value: StringUnion) -> Optional[T]:
         type_args = get_args(typehint)
         for _type in type_args:
             try:
@@ -90,11 +101,17 @@ def union_caster(typehint: TypeHint) -> Callable[[Any], Any]:
                 if value != str(typed_value):
                     continue
             return typed_value
+        return None
     return caster
 
 
-def generic_caster(typehint: TypeHint) -> Callable[[Any], Any]:
-    def caster(value: str) -> Any:
+def generic_caster(typehint: TypeHint) -> Callable[[str], Union[T, str]]:
+    """If we don't know how to handle a type, try calling it with a
+    single argument constructor. If it fails, return the original string
+    value rather than failing - we should fail with ValueErrors when the
+    value is known not to match the expected type, not when we don't
+    know how to handle a type. """
+    def caster(value: str) -> Union[T, str]:
         try:
             return typehint(value)
         except TypeError:
@@ -108,8 +125,8 @@ def bool_caster(value: str) -> Optional[bool]:
     return None
 
 
-def json_caster(typehint: TypeHint) -> Callable[[Any], Any]:
-    def caster(value: str) -> Optional[Union[Dict[str, Any], List[Any]]]:
+def json_caster(typehint: TypeHint) -> Callable[[str], JSONReturn]:
+    def caster(value: str) -> JSONReturn:
         try:
             json_value = json.loads(value)
             if istype(type(json_value), (typehint, get_origin(typehint))):
@@ -120,8 +137,8 @@ def json_caster(typehint: TypeHint) -> Callable[[Any], Any]:
     return caster
 
 
-def collection_caster(typehint: TypeHint) -> Callable[[Any], Any]:
-    def caster(value: RawStringList) -> Optional[Collection[Any]]:
+def collection_caster(typehint: TypeHint) -> Callable[[StringUnion], CollectionReturn]:
+    def caster(value: StringUnion) -> CollectionReturn:
         base_type = get_origin(typehint) or typehint
         if isinstance(value, str):
             value = [value]
@@ -145,29 +162,38 @@ def collection_caster(typehint: TypeHint) -> Callable[[Any], Any]:
     return caster
 
 
-def datetime_caster(typehint: TypeHint) -> Callable[[Any], Any]:
-    def caster(value: str) -> Union[date, datetime, time]:
+def datetime_caster(typehint: TypeHint) -> Callable[[str], DateTimeReturn]:
+    def caster(value: str) -> DateTimeReturn:
         if value.isdecimal() and issubtype(typehint, date):
             return typehint.fromtimestamp(int(value))
         return typehint.fromisoformat(value)
     return caster
 
 
-def pattern_caster(value: str) -> Any:
-    return re.compile(value)
+def pattern_caster(typehint: TypeHint) -> Callable[[str], PatternReturn]:
+    def caster(value: str) -> PatternReturn:
+        if member_types := get_args(typehint):
+            value = cast_to_type(value, member_types[0], strict=True)
+        return re.compile(value)
+    return caster
 
 
-def textio_caster(value: str) -> Any:
-    if not sys.stdin.isatty():
-        return sys.stdin
-    file = Path(value)
-    if not file.exists():
-        raise ValueError(f"no such file or directory: {value}")
-    return file
+def io_caster(typehint: TypeHint) -> Callable[[str], IOReturn]:
+    def caster(value: str) -> IOReturn:
+        if not sys.stdin.isatty():
+            if istextio(typehint):
+                return sys.stdin
+            return sys.stdin.buffer
+        file = Path(value)
+        if not file.exists():
+            raise ValueError(f"no such file or directory: {value}")
+        mode: IOMode = 'r' if istextio(typehint) else 'rb'
+        return file.open(mode=mode)
+    return caster
 
 
-def literal_caster(typehint: TypeHint) -> Callable[[Any], Any]:
-    def caster(value: str) -> Any:
+def literal_caster(typehint: TypeHint) -> Callable[[str], Optional[T]]:
+    def caster(value: str) -> Optional[T]:
         type_literals = get_args(typehint)
         for lit in type_literals:
             try:
@@ -180,7 +206,7 @@ def literal_caster(typehint: TypeHint) -> Callable[[Any], Any]:
     return caster
 
 
-def untyped_caster(value: str) -> Any:
+def untyped_caster(value: str) -> Union[bool, int, str]:
     if value in ['true', 'false']:
         return value == 'true'
     if value.isdecimal():
@@ -232,7 +258,7 @@ def issubtype(typehint: TypeHint, comparetypes: TypeHintTuple) -> bool:
 def containstype(typehint: TypeHint, comparetypes: TypeHintTuple) -> bool:
     def _containstype(type_map: TypeMap, comparetypes: TypeHintTuple) -> bool:
         for key, value in type_map.items():
-            if key in comparetypes:
+            if issubtype(key, comparetypes):
                 return True
             if value is None:
                 continue
@@ -250,8 +276,18 @@ def isunion(typehint: TypeHint) -> bool:
     return len(type_map) > 1
 
 
+def isio(typehint: TypeHint) -> bool:
+    return containstype(typehint, (IO, IOBase))
+
+
 def istextio(typehint: TypeHint) -> bool:
-    return containstype(typehint, (TextIO, TextIOWrapper))
+    if not isio(typehint):
+        return False
+    return containstype(typehint, (TextIO, TextIOBase, str))
+
+
+def iscontainer(typehint: TypeHint) -> bool:
+    return containstype(typehint, (Sequence, Set))
 
 
 def get_typehint_name(typehint: TypeHint) -> str:
@@ -267,7 +303,7 @@ def get_typehint_name(typehint: TypeHint) -> str:
     origin = get_origin(typehint)
     if origin is Literal:
         return str(get_args(typehint))[1:-1]
-    if istextio(typehint):
+    if isio(typehint):
         name = 'file(s)' if issubtype(typehint, Collection) else 'file'
         return f'{name} / stdin'
     if origin is not None:
@@ -277,7 +313,7 @@ def get_typehint_name(typehint: TypeHint) -> str:
     return str(typehint)
 
 
-def cast_to_shell(value: Any) -> Tuple[str, str]:
+def cast_to_shell(value: object) -> Tuple[str, str]:
     typedef = ''
     if isinstance(value, bool):
         value = str(value).lower()
@@ -289,7 +325,8 @@ def cast_to_shell(value: Any) -> Tuple[str, str]:
         value = f'({" ".join(shell_array)})'
         typedef = '-a'
     elif isinstance(value, dict):
-        shell_array = [f'[{cast_to_shell(k)[0]}]={cast_to_shell(v)[0]}' for k, v in value.items()]
+        shell_array = [f'[{cast_to_shell(k)[0]}]={cast_to_shell(v)[0]}'
+                       for k, v in value.items()]
         value = f'({" ".join(shell_array)})'
         typedef = '-A'
     elif value is None:

@@ -6,11 +6,18 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Iterator, List, Optional, Tuple, TypedDict
 
 
 
-Members = List[Tuple[str, Any]]
+class _MemberDef(TypedDict):
+    name: str
+    type: str
+    value: object
+
+
+MemberDefinitions = Iterator[_MemberDef]
+Members = List[Tuple[str, object]]
 
 
 def load_path(module_path: Path) -> ModuleType:
@@ -27,7 +34,7 @@ def load_path(module_path: Path) -> ModuleType:
     return module
 
 
-def module_definitions(module: ModuleType) -> Iterator[Dict[str, Any]]:
+def module_definitions(module: ModuleType) -> MemberDefinitions:
     module_exports = getattr(module, '__all__', None)
     valid_members = []
     for name, value in inspect.getmembers(module):
@@ -42,7 +49,7 @@ def module_definitions(module: ModuleType) -> Iterator[Dict[str, Any]]:
     yield from member_definitions(valid_members)
 
 
-def member_definitions(members: Members, parent: Optional[str] = None) -> Iterator[Dict[str, Any]]:
+def member_definitions(members: Members, parent: Optional[str] = None) -> MemberDefinitions:
     for name, value in members:
         if name.startswith('__') or isinstance(value, type):
             continue
@@ -58,7 +65,7 @@ def member_definitions(members: Members, parent: Optional[str] = None) -> Iterat
             yield from member_definitions(methods, parent=name)
 
 
-def get_callable(parent: ModuleType, method_str: str) -> Callable[[Any], Any]:
+def get_callable(parent: ModuleType, method_str: str) -> Callable[..., object]:
     attr_list = method_str.split('.')
     current = parent
     for attr in attr_list:
@@ -68,9 +75,9 @@ def get_callable(parent: ModuleType, method_str: str) -> Callable[[Any], Any]:
     return current
 
 
-def isprimitive(obj: Any) -> bool:
+def isprimitive(obj: object) -> bool:
     return isinstance(obj, (int, float, bool, str))
 
 
-def iscollection(obj: Any) -> bool:
+def iscollection(obj: object) -> bool:
     return isinstance(obj, (tuple, list, set, dict))

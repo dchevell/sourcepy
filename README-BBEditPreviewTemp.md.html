@@ -1,0 +1,291 @@
+<h1>Sourcepy</h1>
+<p><strong>Sourcepy</strong> is a tool that allows you to <code>source</code> Python files straight from
+your shell, and use their functions and variables natively. It uses Python’s
+inspect and importlib machinery to transform plain Python functions into
+fully featured shell programs without requiring custom code, and leverages
+powerful type hint introspection to convert shell values into Python objects.</p>
+<h2>Example</h2>
+<pre><code class="language-python"># pygrep.py
+from re import Pattern
+from typing import TextIO
+
+def pygrep(pattern: Pattern, grepdata: list[TextIO]):
+    &quot;&quot;&quot;
+    A minimal grep implementation in Python
+    illustrating some of Sourcepy's features.
+    &quot;&quot;&quot;
+    for file in grepdata:
+        prefix = f'{file.name}:' if len(grepdata) &gt; 1 else ''
+        for line in file:
+            if pattern.search(line):
+                yield line
+</code></pre>
+<pre><code class="language-shell">$ source pygrep.py
+$ pygrep &quot;implementation&quot; pygrep.py
+    A minimal grep implementation in Python
+$ pygrep --help
+usage: pygrep [-h] [--pattern / pattern] [--grepdata [/ grepdata ...]]
+
+A minimal grep implementation in python that illustrates some
+interesting Sourcepy features
+
+options:
+  -h, --help                   show this help message and exit
+
+positional or keyword args:
+  --pattern / pattern          Pattern (required)
+  --grepdata [/ grepdata ...]  file(s) / stdin (required)
+$ echo &quot;one\ntwo\nthree&quot; | pygrep --pattern &quot;o&quot;
+one
+two
+$ MYVAR=$(echo $RANDOM | pygrep &quot;\d&quot;)
+$ echo $MYVAR
+26636
+$ MYVAR=$(pygrep &quot;I hope errors go to stderr&quot; thisfiledoesnotexist)
+usage: pygrep [-h] [--pattern / pattern] [--grepdata [/ grepdata ...]]
+pygrep: error: invalid literal for list[typing.TextIO]: ['thisfiledoesnotexist']
+$ echo $MYVAR
+
+$
+</code></pre>
+<h2>Features</h2>
+<p>Sourcepy provides a number of features to bridge the gap between Python and
+shell semantics to give you the full power and flexibility of your Python
+functions natively from your shell.</p>
+<h3>Source python functions &amp; variables natively in your shell</h3>
+<p>Functions and variables sourced from Python files are available directly in the
+shell, just as though you’d sourced a regular shell script. Where possible,
+variables are converted into supported shell equivalents: strings, integers,
+arrays and associative arrays.</p>
+<p>Even class objects are supported, with namespaced methods available from the
+shell and values/properties available in an associative array named for the
+instance.</p>
+<h3>Dynamically generated argument parsing</h3>
+<p>Function parameters are automatically converted into command line options.
+Sourcepy supports positional only arguments, positional or keyword arguments and
+keyword only arguments, and implements specialised handling for each type.
+Where python requires specific ordering for positional arguments vs keyword
+arguments, shell programs often allow these to be intermixed.</p>
+<h3>Type handling</h3>
+<p>Type hints can be used to coerce input values into their corresponding types.
+Sourcepy provides extensive support for many possible use cases, including
+collections (<code>list</code>s, <code>set</code>s, <code>tuple</code>s etc), <code>Union</code>s, IO streams (files and
+stdin)</p>
+<h3>StdIn support</h3>
+<p>Sourcepy will detect stdin and implicitly route its contents to the first
+parameter of functions. Where greater control is desired, standard <code>IO</code> type
+hints can be used to target stdin at different arguments and to receive the
+<code>sys.stdin</code> (text IO) or <code>sys.stdin.buffer</code> (binary IO) handles directly.</p>
+<h2>Requirements</h2>
+<p>Sourcepy requires 3.8+ or greater. It has no external dependencies and relies
+only on importlib, inspect &amp; typing machinery from the standard library.</p>
+<p>Sourcepy works best with modern shells, e.g. Zsh or Bash 4+</p>
+<h2>Installation</h2>
+<h3>Clone this repository - recommended</h3>
+<p>The easiest way to install Sourcepy is to clone this repository to a folder on
+your local machine:</p>
+<pre><code>git clone https://github.com/dchevell/sourcepy.git ~/.sourcepy
+</code></pre>
+<p>Then simply add <code>source ~/.sourcepy/sourcepy.sh</code> to your shell profile, e.g.
+<code>.zprofile</code> or <code>.bash_profile</code>. If you’d prefer to clone this folder to a
+different location you can, however a <code>~/.sourcepy</code> folder will still be
+created to generate module stubs when sourcing python files.</p>
+<h2>More examples</h2>
+<h3>Type casting</h3>
+<pre><code class="language-python"># demo.py
+def multiply(a: int, b: int) -&gt; int:
+    &quot;&quot;&quot;Sourcepy will coerce incoming values to ints
+    or fail if input is invalid&quot;&quot;&quot;
+    return a * b
+</code></pre>
+<pre><code class="language-shell">$ source demo.py
+$ multiply 3 4
+12
+
+$ multiply a b
+usage: multiply [-h] [--a / a] [--b / b]
+multiply: error: invalid literal for &lt;class 'int'&gt;: a
+</code></pre>
+<pre><code class="language-python"># demo.py
+def fileexists(file: Path) -&gt; bool:
+    &quot;&quot;&quot;Values will be converted into Path objects. Booleans
+    will be converted to shell equivalents (lowercase)&quot;&quot;&quot;
+    return file.exists()
+</code></pre>
+<pre><code class="language-shell">$ fileexists domath.py
+true
+$ fileexists dontmath.py
+false
+</code></pre>
+<p>For data types that can’t be loaded directly with a single argument constructor
+(<code>mytype(arg)</code>), you can create a class that takes a single
+parameter to do this for you. There are many potential approaches to this,
+whether you’re constructing an object in an <code>__init__</code> method or subclassing
+an object and overriding <code>__new__</code></p>
+<pre><code class="language-python"># pagetitle.py
+from lxml.html import HtmlElement, fromstring as htmlfromstring
+
+__all__ = ['pagetitle']
+
+class HTML(HtmlElement):
+    def __new__(cls, html_string, *args, **kwargs) -&gt; HtmlElement:
+        return htmlfromstring(html_string)
+
+def pagetitle(html: HTML) -&gt; str:
+    return html.find('.//title').text
+</code></pre>
+<pre><code class="language-shell">$ source pagetitle.py
+$ pagetitle &quot;&lt;html&gt;&lt;title&gt;This is pretty nifty&lt;/title&gt;&lt;/html&gt;&quot;
+This is pretty nifty
+$ curl -s https://github.com | pagetitle
+GitHub: Where the world builds software · GitHub
+</code></pre>
+<h3>Variables</h3>
+<pre><code class="language-python"># demo.py
+MY_INT = 3 * 7
+FAB_FOUR = ['John', 'Paul', 'George', 'Ringo']
+PROJECT = {'name': 'Sourcepy', 'purpose': 'unknown'}
+</code></pre>
+<pre><code class="language-shell">$ source demo.py
+$ echo $MY_INT
+21
+$ MY_INT=6*7
+$ echo $MY_INT
+42
+$ echo &quot;My favourite drummer is ${FAB_FOUR[-1]}&quot;
+My favourite drummer is Ringo
+$ echo &quot;This is ${PROJECT[name]} and its primary purpose is ${PROJECT[purpose]}&quot;
+This is Sourcepy and its primary purpose is unknown
+</code></pre>
+<h3>Class instances</h3>
+<pre><code class="language-python">from typing import Optional, Literal
+
+DogActions = Optional[Literal['sit', 'speak', 'drop']]
+
+class Dog:
+    def __init__(self, name: str, age: int) -&gt; None:
+        self.name = name
+        self.age = age
+
+    def do(self, action: DogActions = None) -&gt; str:
+        if action == 'sit':
+            return f'{self.name} sat down'
+        if action == 'speak':
+            return f'{self.name} said: bark bark bark'
+        if action == 'drop':
+            return f'{self.name} said: Drop what?'
+        return f'{self.name} looked at you expectantly'
+
+pretzel = Dog('Pretzel', 7)
+</code></pre>
+<pre><code class="language-shell">$ source examples/demo.py
+$ pretzel.do speak
+Pretzel said: bark bark bark
+$ pretzel.do
+Pretzel looked at you expectantly
+$ echo &quot;My dog ${pretzel[name]} is ${pretzel[age]} years old&quot;
+My dog Pretzel is 7 years old
+</code></pre>
+<h2>Supported types</h2>
+<p>Sourcepy provides special handling for many different types to cover a variety
+of use cases; some of these are listed below.</p>
+<p>Note on typing strictness:</p>
+<ul>
+<li>
+<p>When explicit type hints exist, if Sourcepy knows the value is invalid for its
+target type it will fail and raise an error. If Sourcepy does not know (e.g. a
+custom type that does not support a single-argument constructor) then the
+original string value will be returned.</p>
+</li>
+<li>
+<p>Where no type hints exist, Sourcepy will infer types from any default values.
+If the input value can be cast to that type, it will be; if not, the original
+string value will be returned.</p>
+</li>
+</ul>
+<h4>Common types</h4>
+<p>Sourcepy will cast the vast majority of built in types: <code>int</code>, <code>bool</code>, <code>float</code>,
+<code>str</code>, <code>bytes</code>, etc. Bools are recognised from their lowercase shell form
+(<code>true</code> or <code>false</code>). Arguments that support keyword argumentscan also be set via
+special flag-only command-line options, e.g. <code>--my-arg</code> or <code>--no-my-arg</code>.</p>
+<h4>Collections (lists, tuples, sets, etc)</h4>
+<p>Sourcepy allows multiple values to be passed for arguments annotated with a
+valid collection type such as <code>list</code>, <code>set</code> or <code>tuple</code>. If these contain nested
+types, e.g. <code>list[int]</code> or <code>tuple[bool, str]</code> incoming values will be cast
+through the same type introspection pipeline before being returned in the
+specified container. <code>tuple</code>s, which allow set lengths and multiple nested
+types, are fully supported.</p>
+<p>For abstract collection-like types (i.e. those defined in <code>collections.abc</code>), if
+one of these is used rather than a concrete type Sourcepy will return a <code>list</code>.</p>
+<h4>JSON</h4>
+<p>If a single value is passed for a <code>list</code> or <code>dict</code> annotation (including
+<code>Optional</code>s or general <code>Union</code>s), Sourcepy will attempt to convert the value to
+JSON. If successful, and if the resulting value matches the original type, this
+is returned (e.g. a <code>list</code> type that receives a JSON dictionary will fail).
+Otherwise, the value is returned according to general Collections typing rules.
+Whilst Collections typing rules allow for subtypes and matching abstract types,
+JSON casting will only occur when <code>list</code> or <code>dict</code> is explicitly present.</p>
+<h4>Unions</h4>
+<p>Unions are unwrapped and values are tested in order. For example, given the
+type <code>Union[int, str]</code>, Sourcepy would first attempt to return <code>int('hello')</code>,
+detect the <code>ValueError</code> and subsequently attempt <code>str('hello')</code>. If <code>int</code> and
+<code>float</code> are both detected, a tie breaker occurs to ensure <code>float</code> wins when the
+original value contains decimals.</p>
+<h4>IO</h4>
+<p>Sourcepy allows implicit support for stdin for any function without requiring
+explicit annotations, and will read and pass text stream data to the first
+non-keyword-only parameter. Explicitly supplying IO typehints (e.g.
+<code>typing.TextIO</code>, <code>typing.IO[bytes]</code>, <code>io.TextIOBase</code>, etc.) allows for
+supporting some advanced features:</p>
+<ul>
+<li>
+<p>File paths passed as function arguments are converted into open file handles.
+Function calls are wrapped inside a context manager that safely opens and
+closes file handles outside of the lifecycle of the function.</p>
+</li>
+<li>
+<p>Text and binary data are both supported, using the appropriate types from the
+<code>typing</code> or <code>io</code> modules.</p>
+</li>
+<li>
+<p>When an IO typehint is supplied, stdin will be routed to that argument instead
+of the first whenever a tty is not detected. If multiple typehints have IO
+annotations the first one will be selected.</p>
+</li>
+<li>
+<p>IO type annotations can be wrapped in Sequence or Set containers, e.g.
+<code>list[typing.IO[str]]</code> or <code>tuple[typing.TextIO, typing.BinaryIO]</code>. If stdin
+targets an IO type inside a container, only a single item container will be
+supplied (note that the tuple example here would fail in this scenario).</p>
+</li>
+<li>
+<p>Positional, positional-or-keyword, and keyword-only args are natively
+supported</p>
+</li>
+</ul>
+<h4>Literals</h4>
+<p>Sourcepy supports <code>typing.Literal</code> to constrain input values, similar to an
+enum. For example, the annotation <code>operation: Literal['get', 'set', 'del']</code>
+would only accept the listed input values and would raise an error for any
+other input values to the <code>operation</code> argument.</p>
+<h4>Datetime objects</h4>
+<p>Sourcepy can cast <code>datetime.date</code>, <code>datetime.datetime</code> and <code>datetime.time</code>
+objects from input values. All three types support ISO format strings (i.e.
+calling <code>.fromisoformat(value)</code> (limited to what the native type supports), and
+<code>date</code>/<code>datetime</code> objects support unix timestamps (i.e. calling
+<code>.fromtimestamp(value)</code>)</p>
+<h4>Unknown types</h4>
+<p>If Sourcepy doesn’t recognise a type, it will attempt to unwrap the base type
+from <code>Optional</code>s or <code>Union</code>s and pass the raw string value to it as a single
+argument. For example, although Sourcepy contains no special handling to
+recognise <code>pathlib.Path</code> objects, values passed to an argument annotated as
+<code>Path</code> will be converted to <code>Path</code> objects containing the string value (ideally
+a valid file path, but that’s up to you).</p>
+<h4>Untyped arguments</h4>
+<p>Where no type annotations are provided, Sourcepy will apply limited casting
+behaviour. If a default value is provided, Sourcepy will infer the type from
+this value and attempt to cast input to this type, but will return
+the original string value in the event of an error. Additionally, values
+detected to be integers (<code>value.isdigit()</code>) or shell booleans
+(<code>value in ['true', 'false']</code>) will be cast to these types. This behaviour is
+subject to change based on user feedback.</p>

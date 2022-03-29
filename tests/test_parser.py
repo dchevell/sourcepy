@@ -1,6 +1,8 @@
 from io import BytesIO, TextIOWrapper
-from typing import Any, DefaultDict, Dict, List, Optional, Set, TextIO, Tuple, Union
-
+from typing import (
+    Any, BinaryIO, DefaultDict, Dict, List, Optional, Set, TextIO,
+    Tuple, Union
+)
 import pytest
 
 from parsers import FunctionParameterParser
@@ -128,20 +130,40 @@ def test_parser_implicit_stdin_int(stdin_arg, cmd_args, expected_result, monkeyp
 
 @pytest.mark.parametrize(
     'stdin_arg, cmd_args, expected_result', (
-    (TextIOWrapper(BytesIO(b'test')), ['1', 'true', 'a', 'b c', 'd'], (1, 'test', True, ['a', 'b c', 'd'])),
-    (TextIOWrapper(BytesIO(b'test')), ['1', '--three', 'a', 'b', 'c'], (1, 'test', True, ['a', 'b', 'c'])),
-    (TextIOWrapper(BytesIO(b'test')), ['--one', '1', 'true', 'a', 'b c', 'd'], (1, 'test', True, ['a', 'b c', 'd'])),
-    (TextIOWrapper(BytesIO(b'test')), ['--no-three', '--one', '1', 'a', 'b c', 'd'], (1, 'test', False, ['a', 'b c', 'd'])),
-    (TextIOWrapper(BytesIO(b'test')), ['--no-three', '--one', '1'], (1, 'test', False, None)),
-
+    (BytesIO(b'test'), ['1', 'true', 'a', 'b c', 'd'], (1, 'test', True, ['a', 'b c', 'd'])),
+    (BytesIO(b'test'), ['1', '--three', 'a', 'b', 'c'], (1, 'test', True, ['a', 'b', 'c'])),
+    (BytesIO(b'test'), ['--one', '1', 'true', 'a', 'b c', 'd'], (1, 'test', True, ['a', 'b c', 'd'])),
+    (BytesIO(b'test'), ['--no-three', '--one', '1', 'a', 'b c', 'd'], (1, 'test', False, ['a', 'b c', 'd'])),
+    (BytesIO(b'test'), ['--no-three', '--one', '1'], (1, 'test', False, None)),
+    (BytesIO(b'\x02\xc5\xd8'), ['--no-three', '--one', '1'], UnicodeDecodeError),
 ))
-def test_parser_explicit_stdin_int(stdin_arg, cmd_args, expected_result, monkeypatch):
+def test_parser_explicit_stdin(stdin_arg, cmd_args, expected_result, monkeypatch):
 
     def myfn(one: int, two: TextIO, three: bool, four: Optional[list] = None):
         return one, two.read().rstrip(), three, four
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
-    monkeypatch.setattr('sys.stdin.read', stdin_arg.read)
+    monkeypatch.setattr('sys.stdin', TextIOWrapper(stdin_arg))
+    parser = FunctionParameterParser(myfn)
+    if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
+        with pytest.raises(expected_result):
+            with parser.parse_fn_args(cmd_args) as (args, kwargs):
+                myfn(*args, **kwargs)
+    else:
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == myfn(*args, **kwargs)
+
+@pytest.mark.parametrize(
+    'stdin_arg, cmd_args, expected_result', (
+    (BytesIO(b'\x02\xc5\xd8'), ['1', 'true', 'a', 'b c', 'd'], (1, b'\x02\xc5\xd8', True, ['a', 'b c', 'd'])),
+))
+def test_parser_explicit_stdin_binary(stdin_arg, cmd_args, expected_result, monkeypatch):
+
+    def myfn(one: int, two: BinaryIO, three: bool, four: Optional[list] = None):
+        return one, two.read().rstrip(), three, four
+
+    monkeypatch.setattr('sys.stdin.isatty', lambda: False)
+    monkeypatch.setattr('sys.stdin', TextIOWrapper(stdin_arg))
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
@@ -154,10 +176,10 @@ def test_parser_explicit_stdin_int(stdin_arg, cmd_args, expected_result, monkeyp
 
 @pytest.mark.parametrize(
     'stdin_arg, cmd_args, expected_result', (
-    (TextIOWrapper(BytesIO(b'test')), ['1', 'true', '--four', 'a', 'b c', 'd'], (('test', 1), {'three': True, 'four': ['a', 'b c', 'd']}
+    (BytesIO(b'test'), ['1', 'true', '--four', 'a', 'b c', 'd'], (('test', 1), {'three': True, 'four': ['a', 'b c', 'd']}
         )
     ),
-    (TextIOWrapper(BytesIO(b'test')), ['1', '--three', '--four', 'a', 'b', 'c'], (('test', 1), {'three': True, 'four': ['a', 'b', 'c']}
+    (BytesIO(b'test'), ['1', '--three', '--four', 'a', 'b', 'c'], (('test', 1), {'three': True, 'four': ['a', 'b', 'c']}
         )
     ),
 
@@ -168,7 +190,7 @@ def test_parser_pos_kw_implicit_stdin_str(stdin_arg, cmd_args, expected_result, 
         return one, two, three, four
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
-    monkeypatch.setattr('sys.stdin.read', stdin_arg.read)
+    monkeypatch.setattr('sys.stdin', TextIOWrapper(stdin_arg))
     parser = FunctionParameterParser(myfn)
     if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
         with pytest.raises(expected_result):
@@ -308,3 +330,17 @@ def test_parser_nargs_stdin(stdin_arg, cmd_args, expected_result, monkeypatch):
     else:
         with parser.parse_fn_args(cmd_args) as (args, kwargs):
             assert expected_result == myfn(*args, **kwargs)
+
+
+@pytest.mark.filterwarnings('error::ResourceWarning')
+@pytest.mark.filterwarnings('error::pytest.PytestUnraisableExceptionWarning')
+def test_parser_close_open_files(monkeypatch):
+
+    def myfn(one: TextIO):
+        return one
+
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    parser = FunctionParameterParser(myfn)
+
+    with parser.parse_fn_args(['/dev/null']) as (args, kwargs):
+        myfn(*args, **kwargs)

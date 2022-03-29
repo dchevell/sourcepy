@@ -12,7 +12,7 @@ from casters import cast_to_type, get_typehint_name
 
 
 @pytest.mark.parametrize(
-    'value, type_hint, strict, expected_result', (
+    'value, typehint, strict, expected_result', (
     ('1', int, True, 1),
     ('1.0', float, True, 1.0),
     ('1', None, False, 1),
@@ -21,11 +21,11 @@ from casters import cast_to_type, get_typehint_name
     ('true', None, False, True),
 
     # Support containers
-    (['a', 'b', 'c'], list, True, ['a', 'b', 'c']),
-    (['a', 'b', 'c'], tuple, True, ('a', 'b', 'c')),
-    (['a', 'b', 'c'], set, True, {'a', 'b', 'c'}),
-    (['a', 'b', 'c'], abc.Sequence, True, ['a', 'b', 'c']),
-    (['a', 'b', 'c'], abc.Collection, True, ['a', 'b', 'c']),
+    (['a', 'rb', 'c'], list, True, ['a', 'rb', 'c']),
+    (['a', 'rb', 'c'], tuple, True, ('a', 'rb', 'c')),
+    (['a', 'rb', 'c'], set, True, {'a', 'rb', 'c'}),
+    (['a', 'rb', 'c'], abc.Sequence, True, ['a', 'rb', 'c']),
+    (['a', 'rb', 'c'], abc.Collection, True, ['a', 'rb', 'c']),
 
     # Support inner types for containers
     (['1', '2', '3'], list[int], True, [1, 2, 3]),
@@ -61,6 +61,10 @@ from casters import cast_to_type, get_typehint_name
     # Support regex re.Pattern / typing.Pattern type
     ('^abc$', t.Pattern, True, re.compile('^abc$')),
     ('^abc$', re.Pattern, True, re.compile('^abc$')),
+    ('^abc$', t.Pattern[str], True, re.compile('^abc$')),
+    ('^abc$', re.Pattern[str], True, re.compile('^abc$')),
+    ('^abc$', t.Pattern[bytes], True, re.compile(b'^abc$')),
+    ('^abc$', re.Pattern[bytes], True, re.compile(b'^abc$')),
 
     # Support json values for dict/list types
     ('{"one": 2, "three": [4, 5]}', dict, True, {"one": 2, "three": [4, 5]}),
@@ -81,26 +85,49 @@ from casters import cast_to_type, get_typehint_name
     ('04:23:01.000384', None, False, '04:23:01.000384'),
 
     # TextIO stream from file
-    ('/dev/null', t.TextIO, True, p.Path),
-    ('/dev/null', io.TextIOWrapper, True, p.Path),
+    ('/dev/null', t.TextIO, True, io.TextIOBase),
+    ('/dev/null', t.BinaryIO, True, io.BufferedIOBase),
 ))
-def test_cast_to_type(monkeypatch, value, type_hint, strict, expected_result):
+def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     if isinstance(expected_result, type) and issubclass(expected_result, Exception):
         with pytest.raises(expected_result, match='invalid literal'):
-            cast_to_type(value, type_hint, strict=strict)
+            cast_to_type(value, typehint, strict=strict)
     elif isinstance(expected_result, type):
-        result = cast_to_type(value, type_hint, strict=strict)
-        assert type(result) in (p.Path, p.PosixPath)
+        result = cast_to_type(value, typehint, strict=strict)
+        assert issubclass(type(result), expected_result)
     else:
-        result = cast_to_type(value, type_hint, strict=strict)
+        result = cast_to_type(value, typehint, strict=strict)
         assert result == expected_result
         assert type(result) is type(expected_result)
 
 
+@pytest.mark.parametrize(
+    'value, typehint, expected_mode, expected_result', (
+    # IO stream from stdin
+    (io.BytesIO(b'a b'),    t.TextIO,           'r',    'a b'),
+    (io.BytesIO(b'a b'),    t.BinaryIO,         'rb',    b'a b'),
+    (io.BytesIO(b'a b'),    t.IO[str],          'r',    'a b'),
+    (io.BytesIO(b'a b'),    t.IO[bytes],        'rb',    b'a b'),
+    (io.BytesIO(b'a b'),    io.TextIOBase,      'r',    'a b'),
+    (io.BytesIO(b'a b'),    io.BufferedIOBase,  'rb',    b'a b'),
+    (io.BytesIO(b'a b'),    io.TextIOWrapper,   'r',    'a b'),
+    (io.BytesIO(b'a b'),    io.BytesIO,         'rb',    b'a b'),
+))
+def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_mode, expected_result):
+    monkeypatch.setattr('sys.stdin', io.TextIOWrapper(value))
+    monkeypatch.setattr('sys.stdin.isatty', lambda: False)
+
+    result = cast_to_type(value, typehint, strict=True)
+    print('@@@', result)
+    result = result.read()
+
+    assert result == expected_result
+    assert type(result) is type(expected_result)
+
 
 @pytest.mark.parametrize(
-    'type_hint, name', (
+    'typehint, name', (
         # Native types
         (int,   'int'),         (bool,  'bool'),
         (float, 'float'),       (str,   'str'),
@@ -117,6 +144,7 @@ def test_cast_to_type(monkeypatch, value, type_hint, strict, expected_result):
         (io.TextIOWrapper, 'file / stdin'),
         (t.List[t.TextIO], 'file(s) / stdin'),
         (tuple[io.TextIOWrapper], 'file(s) / stdin'),
+        (list[io.TextIOBase], 'file(s) / stdin'),
 
         # Union types
         (t.Optional[int], 'int'),
@@ -126,5 +154,5 @@ def test_cast_to_type(monkeypatch, value, type_hint, strict, expected_result):
         (dict | int | t.List, 'dict | int | list'),
         (t.Union[t.Set, list, t.DefaultDict], 'set | list | defaultdict'),
 ))
-def test_get_typehint_name(type_hint, name):
-    assert get_typehint_name(type_hint) == name
+def test_get_typehint_name(typehint, name):
+    assert get_typehint_name(typehint) == name
