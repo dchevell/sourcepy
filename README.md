@@ -23,7 +23,7 @@ def pygrep(pattern: Pattern, grepdata: list[TextIO]):
         prefix = f'{file.name}:' if len(grepdata) > 1 else ''
         for line in file:
             if pattern.search(line):
-                yield line
+                yield prefix + line
 ```
 ```shell
 $ source pygrep.py
@@ -88,7 +88,7 @@ Sourcepy provides extensive support for many possible use cases, including
 collections (`list`s, `set`s, `tuple`s etc), `Union`s, IO streams (files and
 stdin)
 
-### StdIn support
+### Stdin support
 
 Sourcepy will detect stdin and implicitly route its contents to the first
 parameter of functions. Where greater control is desired, standard `IO` type
@@ -117,6 +117,13 @@ Then simply add `source ~/.sourcepy/sourcepy.sh` to your shell profile, e.g.
 `.zprofile` or `.bash_profile`. If you'd prefer to clone this folder to a
 different location you can, however a `~/.sourcepy` folder will still be
 created to generate module stubs when sourcing python files.
+
+Sourcepy is not a normal package that is installed into a specific environment.
+It has no dependencies and can be run by any Python 3.8+ interpreter, so a
+more typical use case is to simply `source` files no matter which environment
+or virtualenv is active at the time. Sourced files will always call back to the
+interpreter that originally sourced them, so you can use it in an environment
+agnostic way.
 
 ## More examples
 
