@@ -68,6 +68,8 @@ class FunctionParameterParser(argparse.ArgumentParser):
         super().__init__(**kwargs)
         self.params = inspect.signature(fn).parameters.values()
         self.groups: Dict[str, ArgumentGroup] = {}
+        self.arg_names: Dict[Parameter, Union[Tuple[str], Tuple[str, str]]] = {}
+        self.generate_arg_names()
         self.generate_args()
 
     def generate_args(self) -> None:
@@ -83,16 +85,26 @@ class FunctionParameterParser(argparse.ArgumentParser):
             title = 'keyword only'
             self.groups[title] = self.make_args_group(title, params)
 
+    def generate_arg_names(self) -> None:
+        used_short_flags = ['-h']
+        for param in self.params:
+            if param in positional_only(self.params):
+                self.arg_names[param.name] = (param.name,)
+                continue
+            flag = '--' + param.name.replace('_', '-')
+            for i in range(1, len(param.name)):
+                short_flag = '-' + param.name.replace('_', '')[:i]
+                if short_flag not in used_short_flags:
+                    used_short_flags.append(short_flag)
+                    self.arg_names[param.name] = (flag, short_flag)
+                    break
+            if param.name not in self.arg_names:
+                self.arg_names[param.name] = (flag,)
+
     def make_args_group(self, title: str, params: List[Parameter]) -> ArgumentGroup:
         group = self.add_argument_group(f'{title} args')
         for param in params:
-            if param in positional_only(params) and param is not stdin_target(params):
-                # If stdin is targeting a positional only arg, make into
-                # option (i.e. --foo) to avoid positional parsing ambiguities.
-                # We'll restore position during parsing
-                name = param.name
-            else:
-                name = '--' + param.name.replace('_', '-')
+            name = self.arg_names[param.name]
             options: _ArgOptions = {}
             if default := self.options_default(param):
                 options['default'] = default
@@ -106,7 +118,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 options['nargs'] = nargs
             if helptext := self.options_help(param):
                 options['help'] = helptext
-            group.add_argument(name, **options)
+            group.add_argument(*name, **options)
         return group
 
     def options_default(self, param: Parameter) -> Optional[str]:
