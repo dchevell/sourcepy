@@ -168,7 +168,7 @@ def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_mode, expecte
         (tuple[t.IO[bytes], t.IO[str]], '[file/stdin, file/stdin]'),
 
         # Literals
-        (t.Literal['get', 'set', 'del'], '{"get", "set", "del"}'),
+        (t.Literal['get', 'set', 'del'], "{'get', 'set', 'del'}"),
         (t.Literal[0, 1, True, False], '{0, 1, true, false}')
 
 ))

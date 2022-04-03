@@ -47,7 +47,8 @@ def cast_to_type(value: StringUnion, typehint: Optional[TypeHint] = None, *,
         return typed_value
     except (TypeError, ValueError) as e:
         if strict:
-            raise ValueError(f"invalid {name} value: {cast_to_shell(value)[0]}") from e
+            err = str(e) or f"invalid {name} value: {cast_to_shell(value)[0]}"
+            raise ValueError(err) from e
         return value
 
 
@@ -202,7 +203,9 @@ def literal_caster(typehint: TypeHint) -> Callable[[str], Optional[T]]:
                 continue
             if typed_value in type_literals:
                 return typed_value
-        return None
+        raise ValueError(
+            f'invalid choice: {cast_to_shell(value)} '
+            f'(choose from {get_typehint_name(typehint)[1:-1]})')
     return caster
 
 
@@ -319,7 +322,7 @@ def get_typehint_name(typehint: TypeHint) -> str:
             return name
         return '[...]'
     if origin is Literal:
-        choices = [cast_to_shell(a)[0] for a in get_args(typehint)]
+        choices = [cast_to_shell(a) for a in get_args(typehint)]
         return '{' + ', '.join(choices) + '}'
     if origin is not None:
         return get_typehint_name(origin)
@@ -333,24 +336,28 @@ def get_typehint_name(typehint: TypeHint) -> str:
     return name
 
 
-def cast_to_shell(value: object) -> Tuple[str, str]:
-    typedef = ''
+def cast_to_shell(value: object) -> str:
     if isinstance(value, bool):
-        value = str(value).lower()
-    elif isinstance(value, int):
-        typedef = "-i"
-        value = str(value)
-    elif isinstance(value, (tuple, list, set)):
-        shell_array = [cast_to_shell(v)[0] for v in value]
-        value = f'({" ".join(shell_array)})'
-        typedef = '-a'
-    elif isinstance(value, dict):
-        shell_array = [f'[{cast_to_shell(k)[0]}]={cast_to_shell(v)[0]}'
+        return str(value).lower()
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, (tuple, list, set)):
+        shell_array = [cast_to_shell(v) for v in value]
+        return f"({' '.join(shell_array)})"
+    if isinstance(value, dict):
+        shell_array = [f'[{cast_to_shell(k)}]={cast_to_shell(v)}'
                        for k, v in value.items()]
-        value = f'({" ".join(shell_array)})'
-        typedef = '-A'
-    elif value is None:
-        value = ''
-    else:
-        value = f'"{value}"'
-    return value, typedef
+        return f"({' '.join(shell_array)})"
+    if value is None:
+        return ''
+    return f"'{value}'"
+
+
+def get_typedef(value: object) -> str:
+    if isinstance(value, int):
+        return '-i'
+    if isinstance(value, (tuple, list, set)):
+        return '-a'
+    if isinstance(value, dict):
+        return '-A'
+    return ''

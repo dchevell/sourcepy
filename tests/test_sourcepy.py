@@ -35,7 +35,6 @@ def test_pygrep():
     test_command = r'pygrep "^sourcepy\(\)" < sourcepy.sh'
     out, err = run_from_shell(example_script, test_command)
     out = remove_highlight(out)
-    print(out, '#$$$#', err)
     assert 'sourcepy()' in out
     assert len(err) == 0
 

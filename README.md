@@ -236,13 +236,13 @@ Pretzel looked at you expectantly
 $ echo "My dog ${pretzel[name]} is ${pretzel[age]} years old"
 My dog Pretzel is 7 years old
 $ pretzel.do -h
-usage: pretzel.do [-h] [-a {"sit", "speak", "drop"}]
+usage: pretzel.do [-h] [-a {'sit', 'speak', 'drop'}]
 
 options:
   -h, --help             show this help message and exit
 
 positional or keyword args:
-  action (-a, --action)  {"sit", "speak", "drop"} (default: None)
+  action (-a, --action)  {'sit', 'speak', 'drop'} (default: None)
 ```
 
 

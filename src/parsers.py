@@ -37,7 +37,6 @@ ParserReturn = Union[bool, str, List[str]]
 class _ArgOptions(TypedDict, total=False):
     default: str
     action: Union[str, Type[Action]]
-    choices: List[Any]
     metavar: str
     nargs: Union[int, str]
     help: str
@@ -124,8 +123,6 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 options['default'] = default
             if action := self.options_action(param):
                 options['action'] = action
-            if choices := self.options_choices(param):
-                options['choices'] = choices
             if (metavar := self.options_metavar(param)) is not None:
                 options['metavar'] = metavar
             if nargs := self.options_nargs(param):
@@ -146,16 +143,6 @@ class FunctionParameterParser(argparse.ArgumentParser):
     def options_action(self, param: Parameter) -> OptionsAction:
         if isbooleanaction(param) and param not in positional_only(self.params):
             return BooleanOptionalAction
-        return None
-
-    def options_choices(self, param: Parameter) -> Optional[List[Any]]:
-        if isbooleanaction(param) and param in positional_only(self.params):
-            choices = ['true', 'false']
-            return choices
-        if get_origin(param.annotation) is Literal:
-            choices = [str(a).lower() if isinstance(a, bool) else str(a)
-                       for a in get_args(param.annotation)]
-            return choices
         return None
 
     def options_metavar(self, param: Parameter) -> str:
