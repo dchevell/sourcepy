@@ -1,6 +1,6 @@
 from io import BytesIO, TextIOWrapper
 from typing import (
-    Any, BinaryIO, DefaultDict, Dict, List, Optional, Set, TextIO,
+    Any, BinaryIO, DefaultDict, Dict, List, Literal, Optional, Set, TextIO,
     Tuple, Union
 )
 import pytest
@@ -11,15 +11,15 @@ from parsers import FunctionParameterParser
 
 @pytest.mark.parametrize(
     'cmd_args, expected_result', (
-    (['test', '1', 'true', 'a', 'b c', 'd'], ((), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b c', 'd']}
-        )
-    ),
-    (['test', '1', '--three', 'a', 'b', 'c'],  ((), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b', 'c']}
-        )
-    ),
-    (['test', '1', '--no-three'], ((), {'one': 'test', 'two': 1, 'three': False}
-        )
-    ),
+    (['test', '1', 'true', 'a', 'b c', 'd'], (
+        (), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b c', 'd']}
+    )),
+    (['test', '1', '--three', 'a', 'b', 'c'],  (
+        (), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b', 'c']}
+    )),
+    (['test', '1', '--no-three'], (
+        (), {'one': 'test', 'two': 1, 'three': False}
+    )),
     (['test', '1', 'a', 'b', 'c'], SystemExit),
     (['test', 'test', 'test', 'test'], SystemExit),
 ))
@@ -41,18 +41,18 @@ def test_parser_typed(cmd_args, expected_result, monkeypatch):
 
 @pytest.mark.parametrize(
     'cmd_args, expected_result', (
-    (['test', '1', 'true', '--four', 'a', 'b c', 'd'], (('test', 1), {'three': True, 'four': ['a', 'b c', 'd']}
-        )
-    ),
-    (['test', '1', '--three', '--four', 'a', 'b', 'c'],  (('test', 1), {'three': True, 'four': ['a', 'b', 'c']}
-        )
-    ),
-    (['test', '1', '--no-three'], (('test', 1), {'three': False}
-        )
-    ),
-    (['test', '1'], (('test', 1), {}
-        )
-    ),
+    (['test', '1', 'true', '--four', 'a', 'b c', 'd'], (
+        ('test', 1), {'three': True, 'four': ['a', 'b c', 'd']}
+    )),
+    (['test', '1', '--three', '--four', 'a', 'b', 'c'],  (
+        ('test', 1), {'three': True, 'four': ['a', 'b', 'c']}
+    )),
+    (['test', '1', '--no-three'], (
+        ('test', 1), {'three': False}
+    )),
+    (['test', '1'], (
+        ('test', 1), {}
+    )),
     (['test', '1', 'a', 'b', 'c'], SystemExit),
     (['test', '1', '--three', 'true', 'a', 'b c', 'd'], SystemExit),
     (['test', 'test', 'test', 'test'], SystemExit),
@@ -76,12 +76,12 @@ def test_parser_param_kinds(cmd_args, expected_result, monkeypatch):
 
 @pytest.mark.parametrize(
     'stdin_arg, cmd_args, expected_result', (
-    (TextIOWrapper(BytesIO(b'test')), ['1', 'true', 'a', 'b c', 'd'], ((), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b c', 'd']}
-        )
-    ),
-    (TextIOWrapper(BytesIO(b'test')), ['1', '--three', 'a', 'b', 'c'], ((), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b', 'c']}
-        )
-    ),
+    (TextIOWrapper(BytesIO(b'test')), ['1', 'true', 'a', 'b c', 'd'], (
+        (), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b c', 'd']}
+    )),
+    (TextIOWrapper(BytesIO(b'test')), ['1', '--three', 'a', 'b', 'c'], (
+        (), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b', 'c']}
+    )),
 
 ))
 def test_parser_implicit_stdin_str(stdin_arg, cmd_args, expected_result, monkeypatch):
@@ -103,12 +103,12 @@ def test_parser_implicit_stdin_str(stdin_arg, cmd_args, expected_result, monkeyp
 
 @pytest.mark.parametrize(
     'stdin_arg, cmd_args, expected_result', (
-    (TextIOWrapper(BytesIO(b'1')), ['test', 'true', 'a', 'b c', 'd'], ((), {'one': 1, 'two': 'test', 'three': True, 'four': ['a', 'b c', 'd']}
-        )
-    ),
-    (TextIOWrapper(BytesIO(b'1')), ['test', '--three', 'a', 'b', 'c'], ((), {'one': 1, 'two': 'test', 'three': True, 'four': ['a', 'b', 'c']}
-        )
-    ),
+    (TextIOWrapper(BytesIO(b'1')), ['test', 'true', 'a', 'b c', 'd'], (
+        (), {'one': 1, 'two': 'test', 'three': True, 'four': ['a', 'b c', 'd']}
+    )),
+    (TextIOWrapper(BytesIO(b'1')), ['test', '--three', 'a', 'b', 'c'], (
+        (), {'one': 1, 'two': 'test', 'three': True, 'four': ['a', 'b', 'c']}
+    )),
 
 ))
 def test_parser_implicit_stdin_int(stdin_arg, cmd_args, expected_result, monkeypatch):
@@ -176,12 +176,12 @@ def test_parser_explicit_stdin_binary(stdin_arg, cmd_args, expected_result, monk
 
 @pytest.mark.parametrize(
     'stdin_arg, cmd_args, expected_result', (
-    (BytesIO(b'test'), ['1', 'true', '--four', 'a', 'b c', 'd'], (('test', 1), {'three': True, 'four': ['a', 'b c', 'd']}
-        )
-    ),
-    (BytesIO(b'test'), ['1', '--three', '--four', 'a', 'b', 'c'], (('test', 1), {'three': True, 'four': ['a', 'b', 'c']}
-        )
-    ),
+    (BytesIO(b'test'), ['1', 'true', '--four', 'a', 'b c', 'd'], (
+        ('test', 1), {'three': True, 'four': ['a', 'b c', 'd']}
+    )),
+    (BytesIO(b'test'), ['1', '--three', '--four', 'a', 'b', 'c'], (
+        ('test', 1), {'three': True, 'four': ['a', 'b', 'c']}
+    )),
 
 ))
 def test_parser_pos_kw_implicit_stdin_str(stdin_arg, cmd_args, expected_result, monkeypatch):
@@ -203,36 +203,21 @@ def test_parser_pos_kw_implicit_stdin_str(stdin_arg, cmd_args, expected_result, 
 
 @pytest.mark.parametrize(
     'cmd_args, expected_result', (
-    (
-        ['a', '--two', '1'], (
-            (['a'],),
-            {'two': True, 'three': [1]}
-        )
-    ),
-    (
-        ['a', 'b', '--two', '1', '2'], (
-            (['a', 'b'],),
-            {'two': True, 'three': [1,2]}
-        )
-    ),
-    (
-        ['a', '--no-two', '1', '2', '3'], (
-            (['a'],),
-            {'two': False, 'three': [1, 2, 3]}
-        )
-    ),
-    (
-        ['a', 'b', '--two', '--three', '1', '2'], (
-            (['a', 'b'],),
-            {'two': True, 'three': [1, 2]}
-        )
-    ),
-    (
-        ['--three', '1', '2', '--two', 'a', 'b'], (
-            (['a', 'b'],),
-            {'two': True, 'three': [1,2]}
-        )
-    ),
+    (['a', '--two', '1'], (
+            (['a'],), {'two': True, 'three': [1]}
+    )),
+    (['a', 'b', '--two', '1', '2'], (
+            (['a', 'b'],), {'two': True, 'three': [1,2]}
+    )),
+    (['a', '--no-two', '1', '2', '3'], (
+            (['a'],), {'two': False, 'three': [1, 2, 3]}
+    )),
+    (['a', 'b', '--two', '--three', '1', '2'], (
+            (['a', 'b'],), {'two': True, 'three': [1, 2]}
+    )),
+    (['--three', '1', '2', '--two', 'a', 'b'], (
+            (['a', 'b'],), {'two': True, 'three': [1,2]}
+    )),
 ))
 def test_parser_nargs_list(cmd_args, expected_result, monkeypatch):
 
@@ -253,37 +238,21 @@ def test_parser_nargs_list(cmd_args, expected_result, monkeypatch):
 
 @pytest.mark.parametrize(
     'cmd_args, expected_result', (
-    (
-        ['1', 'a', '--two', '1'], (
-            ((1, 'a'),),
-            {'two': True, 'three': (1,)}
-        )
-    ),
-    (
-        ['1', 'a', '--two', '1', '2'], (
-            ((1, 'a'),),
-            {'two': True, 'three': (1, 2)}
-        )
-    ),
-    (
-        ['1', 'a', '--no-two', '1', '2', '3'], (
-            ((1, 'a'),),
-            {'two': False, 'three': (1, 2, 3)}
-        )
-    ),
-    (
-        ['1', 'a', '--two', '--three', '1', '2'], (
-            ((1, 'a'),),
-            {'two': True, 'three': (1, 2)}
-        )
-    ),
-    (
-        ['--three', '1', '2', '--two', '1', 'a'], (
-            ((1, 'a'),),
-            {'two': True, 'three': (1, 2)}
-        )
-    ),
-
+    (['1', 'a', '--two', '1'], (
+            ((1, 'a'),), {'two': True, 'three': (1,)}
+    )),
+    (['1', 'a', '--two', '1', '2'], (
+            ((1, 'a'),), {'two': True, 'three': (1, 2)}
+    )),
+    (['1', 'a', '--no-two', '1', '2', '3'], (
+            ((1, 'a'),), {'two': False, 'three': (1, 2, 3)}
+    )),
+    (['1', 'a', '--two', '--three', '1', '2'], (
+            ((1, 'a'),), {'two': True, 'three': (1, 2)}
+    )),
+    (['--three', '1', '2', '--two', '1', 'a'], (
+            ((1, 'a'),), {'two': True, 'three': (1, 2)}
+    )),
 ))
 def test_parser_nargs_tuple(cmd_args, expected_result, monkeypatch):
 
@@ -304,12 +273,9 @@ def test_parser_nargs_tuple(cmd_args, expected_result, monkeypatch):
 
 @pytest.mark.parametrize(
     'stdin_arg, cmd_args, expected_result', (
-    (
-        (TextIOWrapper(BytesIO(b'a b'))),
-        ['test'],
+    ((TextIOWrapper(BytesIO(b'a b'))), ['test'],
         ('test', 'a b'),
     ),
-
 ))
 def test_parser_nargs_stdin(stdin_arg, cmd_args, expected_result, monkeypatch):
 
@@ -344,3 +310,33 @@ def test_parser_close_open_files(monkeypatch):
 
     with parser.parse_fn_args(['/dev/null']) as (args, kwargs):
         myfn(*args, **kwargs)
+
+
+@pytest.mark.parametrize(
+    'cmd_args, expected_result', (
+
+    (['get', '0'], (
+        ('get',), {'two': 0}
+    )),
+    (['set', 'true'], (
+        ('set',), {'two': True}
+    )),
+    (['set', '--two', 'true'], (
+        ('set',), {'two': True}
+    )),
+
+))
+def test_parser_literals(cmd_args, expected_result, monkeypatch):
+
+    def myfn(one: Literal['get', 'set', 'del'], /, two: Literal[0, 1, True, False]):
+        return one, two
+
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    parser = FunctionParameterParser(myfn)
+    if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
+        with pytest.raises(expected_result):
+            with parser.parse_fn_args(cmd_args):
+                pass
+    else:
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == (args, kwargs)

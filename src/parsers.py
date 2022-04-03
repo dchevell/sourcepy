@@ -12,7 +12,7 @@ from typing import (
 )
 
 from casters import (
-    cast_to_type, iscontainer, isio, issubtype, get_typehint_name
+    cast_to_type, iscontainer, containsio, issubtype, get_typehint_name
 )
 
 # Fall back on regular boolean action < Python 3.9
@@ -25,6 +25,7 @@ else:
 
 STDIN = '==STDIN==' # placeholder for stdin
 
+ArgNames = Dict[str, Union[Tuple[str], Tuple[str, str]]]
 NumArgs = Optional[Union[int, Literal['*']]]
 OptionsAction = Optional[Union[str, Type[Action]]]
 OptionsNargs = Optional[Union[int, str]]
@@ -42,14 +43,28 @@ class _ArgOptions(TypedDict, total=False):
     help: str
 
 
-class WideFormatter(argparse.RawTextHelpFormatter):
-    """Argparse help text formatter with a higher default indent
-    position to make more room for positional-or-kwarg options text.
+class SourcepyFormatter(argparse.HelpFormatter):
+    """Custom argparse help text formatter
     """
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if 'max_help_position' not in kwargs:
             kwargs['max_help_position'] = 36
         super().__init__(*args, **kwargs)
+
+    def _format_action_invocation(self, action: Action) -> str:
+        options = ', '.join(action.option_strings)
+        if action.dest == 'help':
+            return options
+        name, = self._metavar_formatter(action, action.dest)(1)
+        if name and options:
+            return f'{name} ({options})'
+        return name + options
+
+    def _format_args(self, action: Action, default_metavar: str) -> str:
+        helptext = action.help or ''
+        usage_idx = helptext.find(' (')
+        arg_usage = helptext[:usage_idx]
+        return arg_usage
 
 
 class FunctionParameterParser(argparse.ArgumentParser):
@@ -64,11 +79,11 @@ class FunctionParameterParser(argparse.ArgumentParser):
         if 'description' not in kwargs:
             kwargs['description'] = inspect.getdoc(fn)
         if 'formatter_class' not in kwargs:
-            kwargs['formatter_class'] = WideFormatter
+            kwargs['formatter_class'] = SourcepyFormatter
         super().__init__(**kwargs)
         self.params = inspect.signature(fn).parameters.values()
         self.groups: Dict[str, ArgumentGroup] = {}
-        self.arg_names: Dict[Parameter, Union[Tuple[str], Tuple[str, str]]] = {}
+        self.arg_names: ArgNames = {}
         self.generate_arg_names()
         self.generate_args()
 
@@ -88,16 +103,15 @@ class FunctionParameterParser(argparse.ArgumentParser):
     def generate_arg_names(self) -> None:
         used_short_flags = ['-h']
         for param in self.params:
-            if param in positional_only(self.params):
-                self.arg_names[param.name] = (param.name,)
-                continue
             flag = '--' + param.name.replace('_', '-')
-            for i in range(1, len(param.name)):
-                short_flag = '-' + param.name.replace('_', '')[:i]
-                if short_flag not in used_short_flags:
-                    used_short_flags.append(short_flag)
-                    self.arg_names[param.name] = (flag, short_flag)
-                    break
+            if param in positional_only(self.params):
+                if not param is stdin_target(self.params):
+                    self.arg_names[param.name] = (param.name,)
+                    continue
+            short_flag = '-' + param.name.replace('_', '')[:1]
+            if short_flag not in used_short_flags:
+                used_short_flags.append(short_flag)
+                self.arg_names[param.name] = (short_flag, flag)
             if param.name not in self.arg_names:
                 self.arg_names[param.name] = (flag,)
 
@@ -112,7 +126,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 options['action'] = action
             if choices := self.options_choices(param):
                 options['choices'] = choices
-            if metavar := self.options_metavar(param):
+            if (metavar := self.options_metavar(param)) is not None:
                 options['metavar'] = metavar
             if nargs := self.options_nargs(param):
                 options['nargs'] = nargs
@@ -139,15 +153,14 @@ class FunctionParameterParser(argparse.ArgumentParser):
             choices = ['true', 'false']
             return choices
         if get_origin(param.annotation) is Literal:
-            choices = list(get_args(param.annotation))
+            choices = [str(a).lower() if isinstance(a, bool) else str(a)
+                       for a in get_args(param.annotation)]
             return choices
         return None
 
     def options_metavar(self, param: Parameter) -> str:
-        if param in positional_only(self.params):
+        if param not in keyword_only(self.params):
             return param.name
-        if param in positional_or_keyword(self.params):
-            return f'/ {param.name}'
         return ''
 
     def options_nargs(self, param: Parameter) -> OptionsNargs:
@@ -185,8 +198,8 @@ class FunctionParameterParser(argparse.ArgumentParser):
             try:
                 value = self.typecaster(parsed[param.name], param)
             except (ValueError, TypeError) as e:
-                self.error(str(e))
-            if isio(param.annotation) and sys.stdin.isatty():
+                self.error(f'argument {param.name}: {e}')
+            if containsio(param.annotation) and sys.stdin.isatty():
                 handles = value if iscontainer(type(value)) else [value]
                 open_handles.extend(handles)
             if param not in positional_only(self.params):
@@ -237,7 +250,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
         typehint = get_typehint(param)
         strict = typehint is param.annotation
         implicit_stdin = None
-        if param is stdin_target(self.params) and not isio(typehint):
+        if param is stdin_target(self.params) and not containsio(typehint):
             implicit_stdin = sys.stdin.read().rstrip()
         if implicit_stdin is not None:
             value = implicit_stdin
@@ -264,7 +277,7 @@ def stdin_target(params: ParamsList) -> Optional[Parameter]:
     for param in params:
         if sys.stdin.isatty():
             return None
-        if isio(param.annotation):
+        if containsio(param.annotation):
             return param
     if len(params) == len(keyword_only(params)):
         return None

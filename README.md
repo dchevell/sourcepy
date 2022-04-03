@@ -15,9 +15,7 @@ from re import Pattern
 from typing import TextIO
 
 def pygrep(pattern: Pattern, grepdata: list[TextIO]):
-    """
-    A minimal grep implementation in Python
-    illustrating some interesting Sourcepy features.
+    """A minimal grep implementation in Python
     """
     for file in grepdata:
         prefix = f'{file.name}:' if len(grepdata) > 1 else ''
@@ -28,19 +26,18 @@ def pygrep(pattern: Pattern, grepdata: list[TextIO]):
 ```shell
 $ source pygrep.py
 $ pygrep "implementation" pygrep.py
-    A minimal grep implementation in Python
+    """A minimal grep implementation in Python
 $ pygrep --help
-usage: pygrep [-h] [--pattern / pattern] [--grepdata [/ grepdata ...]]
+usage: pygrep [-h] [-p Pattern] [-g [file/stdin ...]]
 
-    A minimal grep implementation in Python
-    illustrating some interesting Sourcepy features.
+A minimal grep implementation in Python
 
 options:
-  -h, --help                   show this help message and exit
+  -h, --help                 show this help message and exit
 
 positional or keyword args:
-  --pattern / pattern          Pattern (required)
-  --grepdata [/ grepdata ...]  file(s) / stdin (required)
+  pattern (-p, --pattern)    Pattern (required)
+  grepdata (-g, --grepdata)  [file/stdin ...] (required)
 $ echo "one\ntwo\nthree" | pygrep --pattern "o"
 one
 two
@@ -48,8 +45,8 @@ $ MYVAR=$(echo $RANDOM | pygrep "\d")
 $ echo $MYVAR
 26636
 $ MYVAR=$(pygrep "I hope errors go to stderr" thisfiledoesnotexist)
-usage: pygrep [-h] [--pattern / pattern] [--grepdata [/ grepdata ...]]
-pygrep: error: invalid literal for list[typing.TextIO]: ['thisfiledoesnotexist']
+usage: pygrep [-h] [-p Pattern] [-g [file/stdin ...]]
+pygrep: error: argument grepdata: invalid [file/stdin ...] value: ("thisfiledoesnotexist")
 $ echo $MYVAR
 
 $
@@ -131,19 +128,18 @@ agnostic way.
 
 ```python
 # demo.py
-def multiply(a: int, b: int) -> int:
+def multiply(x: int, y: int) -> int:
     """Sourcepy will coerce incoming values to ints
     or fail if input is invalid"""
-    return a * b
+    return x * y
 ```
 ```shell
 $ source demo.py
 $ multiply 3 4
 12
-
 $ multiply a b
-usage: multiply [-h] [--a / a] [--b / b]
-multiply: error: invalid literal for <class 'int'>: a
+usage: multiply [-h] [-x int] [-y int]
+multiply: error: argument x: invalid int value: "a"
 ```
 ```python
 # demo.py
@@ -153,9 +149,9 @@ def fileexists(file: Path) -> bool:
     return file.exists()
 ```
 ```shell
-$ fileexists domath.py
+$ fileexists demo.py
 true
-$ fileexists dontmath.py
+$ fileexists nemo.py
 false
 ```
 
@@ -210,6 +206,7 @@ This is Sourcepy and its primary purpose is unknown
 ### Class instances
 
 ```python
+# demo.py
 from typing import Optional, Literal
 
 DogActions = Optional[Literal['sit', 'speak', 'drop']]
@@ -238,6 +235,14 @@ $ pretzel.do
 Pretzel looked at you expectantly
 $ echo "My dog ${pretzel[name]} is ${pretzel[age]} years old"
 My dog Pretzel is 7 years old
+$ pretzel.do -h
+usage: pretzel.do [-h] [-a {"sit", "speak", "drop"}]
+
+options:
+  -h, --help             show this help message and exit
+
+positional or keyword args:
+  action (-a, --action)  {"sit", "speak", "drop"} (default: None)
 ```
 
 

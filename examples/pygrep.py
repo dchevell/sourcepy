@@ -128,8 +128,8 @@ def _highlight(matchobj: Match) -> str:
 
 
 def pygrep(pattern: Pattern, grepdata: list[TextIO]) -> Iterator[str]:
-    """A minimal grep implementation in python that illustrates
-    some interesting Sourcepy features"""
+    """A minimal grep implementation in Python
+    """
     for file in grepdata:
         prefix = f'{file.name}:' if len(grepdata) > 1 else ''
         for line in file:

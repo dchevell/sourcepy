@@ -91,7 +91,7 @@ from casters import cast_to_type, get_typehint_name
 def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     if isinstance(expected_result, type) and issubclass(expected_result, Exception):
-        with pytest.raises(expected_result, match='invalid literal'):
+        with pytest.raises(expected_result, match='invalid'):
             cast_to_type(value, typehint, strict=strict)
     elif isinstance(expected_result, type):
         result = cast_to_type(value, typehint, strict=strict)
@@ -105,14 +105,14 @@ def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
 @pytest.mark.parametrize(
     'value, typehint, expected_mode, expected_result', (
     # IO stream from stdin
-    (io.BytesIO(b'a b'),    t.TextIO,           'r',    'a b'),
     (io.BytesIO(b'a b'),    t.BinaryIO,         'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    t.IO[str],          'r',    'a b'),
+    (io.BytesIO(b'a b'),    t.TextIO,           'r',    'a b'),
     (io.BytesIO(b'a b'),    t.IO[bytes],        'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    io.TextIOBase,      'r',    'a b'),
+    (io.BytesIO(b'a b'),    t.IO[str],          'r',    'a b'),
     (io.BytesIO(b'a b'),    io.BufferedIOBase,  'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    io.TextIOWrapper,   'r',    'a b'),
+    (io.BytesIO(b'a b'),    io.TextIOBase,      'r',    'a b'),
     (io.BytesIO(b'a b'),    io.BytesIO,         'rb',    b'a b'),
+    (io.BytesIO(b'a b'),    io.TextIOWrapper,   'r',    'a b'),
 ))
 def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_mode, expected_result):
     monkeypatch.setattr('sys.stdin', io.TextIOWrapper(value))
@@ -131,28 +131,49 @@ def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_mode, expecte
         # Native types
         (int,   'int'),         (bool,  'bool'),
         (float, 'float'),       (str,   'str'),
-        (tuple, 'tuple'),       (list,  'list'),
-        (set,   'set'),         (dict,  'dict'),
+        (tuple, '[...]'),       (list,  '[...]'),
+        (set,   '[...]'),         (dict,  'dict'),
 
         # typing module built in generics
-        (t.Dict,  'dict'),        (t.List,  'list'),
-        (t.Set,   'set'),         (t.Tuple, 'tuple'),
+        (t.Dict,  'dict'),        (t.List,  '[...]'),
+        (t.Set,   '[...]'),         (t.Tuple, '[...]'),
         (t.DefaultDict, 'defaultdict'),
 
         # file / stdin
-        (t.TextIO, 'file / stdin'),
-        (io.TextIOWrapper, 'file / stdin'),
-        (t.List[t.TextIO], 'file(s) / stdin'),
-        (tuple[io.TextIOWrapper], 'file(s) / stdin'),
-        (list[io.TextIOBase], 'file(s) / stdin'),
+        (t.BinaryIO, 'file/stdin'),
+        (t.TextIO, 'file/stdin'),
+        (t.IO[bytes], 'file/stdin'),
+        (t.IO[str], 'file/stdin'),
+        (io.BufferedIOBase, 'file/stdin'),
+        (io.TextIOBase, 'file/stdin'),
+        (io.BytesIO, 'file/stdin'),
+        (io.TextIOWrapper, 'file/stdin'),
 
         # Union types
-        (t.Optional[int], 'int'),
-        (t.Optional[t.List], 'list'),
-        (list | dict, 'list | dict'),
-        (t.Union[int, str], 'int | str'),
-        (dict | int | t.List, 'dict | int | list'),
-        (t.Union[t.Set, list, t.DefaultDict], 'set | list | defaultdict'),
+        (t.Optional[int],                       'int'),
+        (t.Optional[t.List],                    '[...]'),
+        (list | dict,                           ['[...]', 'dict']),
+        (t.Union[int, str],                     ['int', 'str']),
+        (dict | int | t.List,                   ['dict', 'int', '[...]']),
+        (t.Union[t.Set, list, t.DefaultDict],   ['[...]', 'defaultdict']),
+
+        # Inner types for containers
+        (t.List[int], '[int ...]'),
+        (t.Tuple[int, int], '[int, int]'),
+        (t.List[int], '[int ...]'),
+        (t.Tuple[int, int], '[int, int]'),
+        (t.List[t.TextIO], '[file/stdin ...]'),
+        (tuple[io.TextIOWrapper], '[file/stdin]'),
+        (list[io.BytesIO], '[file/stdin ...]'),
+        (tuple[t.IO[bytes], t.IO[str]], '[file/stdin, file/stdin]'),
+
+        # Literals
+        (t.Literal['get', 'set', 'del'], '{"get", "set", "del"}'),
+        (t.Literal[0, 1, True, False], '{0, 1, true, false}')
+
 ))
 def test_get_typehint_name(typehint, name):
-    assert get_typehint_name(typehint) == name
+    if isinstance(name, list):
+        assert get_typehint_name(typehint) == ' | '.join(set(name))
+    else:
+        assert get_typehint_name(typehint) == name
