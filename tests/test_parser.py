@@ -1,8 +1,7 @@
 from io import BytesIO, TextIOWrapper
-from typing import (
-    Any, BinaryIO, DefaultDict, Dict, List, Literal, Optional, Set, TextIO,
-    Tuple, Union
-)
+from typing import (Any, BinaryIO, DefaultDict, Dict, List, Literal, Optional,
+                    Set, TextIO, Tuple, Union)
+
 import pytest
 
 from parsers import FunctionParameterParser
@@ -324,11 +323,16 @@ def test_parser_close_open_files(monkeypatch):
     (['set', '--two', 'true'], (
         ('set',), {'two': True}
     )),
-
+    (['make', '--two', 'false'], (
+        SystemExit
+    )),
+    (['set', '--two', 'cheese'], (
+        SystemExit
+    )),
 ))
 def test_parser_literals(cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: Literal['get', 'set', 'del'], /, two: Literal[0, 1, True, False]):
+    def myfn(one: Literal['get', 'set', 'del'], /, two: Optional[Literal[0, 1, True, False]]):
         return one, two
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)

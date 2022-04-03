@@ -4,7 +4,8 @@ Note: this example relies on lxml, which is not part of the standard
 library.
 """
 
-from lxml.html import HtmlElement, fromstring as htmlfromstring
+from lxml.html import HtmlElement
+from lxml.html import fromstring as htmlfromstring
 
 __all__ = ['pagetitle']
 

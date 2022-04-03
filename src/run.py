@@ -1,6 +1,5 @@
 import contextlib
 import sys
-
 from pathlib import Path
 from typing import Generator, Iterator, List
 

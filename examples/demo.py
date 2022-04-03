@@ -18,6 +18,7 @@ def multiply(x: int, y: int) -> int:
     return x * y
 
 
+
 from pathlib import Path
 
 def fileexists(file: Path) -> bool:
@@ -26,13 +27,15 @@ def fileexists(file: Path) -> bool:
     return file.exists()
 
 
+
 # Variables
 MY_INT = 3 * 7
 FAB_FOUR = ['John', 'Paul', 'George', 'Ringo']
 PROJECT = {'name': 'Sourcepy', 'purpose': 'unknown'}
 
 
-from typing import Optional, Literal
+
+from typing import Literal, Optional
 
 DogActions = Optional[Literal['sit', 'speak', 'drop']]
 

@@ -2,18 +2,15 @@ import argparse
 import contextlib
 import inspect
 import sys
-
-from argparse import Action, _ArgumentGroup as ArgumentGroup
+from argparse import Action
+from argparse import _ArgumentGroup as ArgumentGroup
 from collections.abc import Callable, ValuesView
 from inspect import Parameter
-from typing import (
-    Any, Dict, Iterator, List, Literal, Optional, Tuple, Type, TypedDict, Union,
-    get_args, get_origin
-)
+from typing import (Any, Dict, Iterator, List, Literal, Optional, Tuple, Type,
+                    TypedDict, Union, get_args, get_origin)
 
-from casters import (
-    cast_to_type, iscontainer, containsio, issubtype, get_typehint_name
-)
+from casters import (CastingError, cast_to_type, containsio, get_typehint_name,
+                     iscontainer, issubtype)
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -184,7 +181,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 continue
             try:
                 value = self.typecaster(parsed[param.name], param)
-            except (ValueError, TypeError) as e:
+            except (CastingError, ValueError) as e:
                 self.error(f'argument {param.name}: {e}')
             if containsio(param.annotation) and sys.stdin.isatty():
                 handles = value if iscontainer(type(value)) else [value]

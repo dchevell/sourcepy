@@ -2,17 +2,17 @@ import inspect
 import json
 import re
 import sys
-
 from collections.abc import Callable, Collection
 from datetime import date, datetime, time
 from io import IOBase, TextIOBase
 from pathlib import Path
 from re import Pattern
-from typing import (
-    Any, Dict, IO, List, Literal, Optional, Sequence, Set, TextIO, Tuple, Type, TypeVar,
-    Union, get_args, get_origin
-)
-from typing import _Final as TypingBase # type: ignore[attr-defined]
+from typing import (IO, Any, Dict, List, Literal, Optional, Sequence, Set,
+                    TextIO, Tuple, Type, TypeVar, Union)
+from typing import _Final as TypingBase  # type: ignore[attr-defined]
+from typing import get_args, get_origin
+
+
 
 if sys.version_info >= (3, 10):
     from types import UnionType
@@ -36,6 +36,11 @@ TypeMap = Dict[Type[Any], Optional[Dict[Type[Any], Any]]]
 IOMode = Literal['r', 'rb', 'w', 'wb']
 
 
+class CastingError(Exception):
+    """Custom exception for casters
+    """
+
+
 def cast_to_type(value: StringUnion, typehint: Optional[TypeHint] = None, *,
                  strict: bool = False) -> Any:
     typecaster = get_caster(typehint)
@@ -47,9 +52,10 @@ def cast_to_type(value: StringUnion, typehint: Optional[TypeHint] = None, *,
         return typed_value
     except (TypeError, ValueError) as e:
         if strict:
-            err = str(e) or f"invalid {name} value: {cast_to_shell(value)[0]}"
+            err = f"invalid {name} value: {cast_to_shell(value)}"
             raise ValueError(err) from e
         return value
+
 
 
 def get_caster(typehint: TypeHint) -> Callable[..., Any]:
@@ -97,7 +103,7 @@ def union_caster(typehint: TypeHint) -> Callable[[StringUnion], Optional[T]]:
                     typed_value = cast_to_type(value, _type, strict=True)
             except (TypeError, ValueError):
                 continue
-            # prevent float matching ints if both in Union
+            # prevent floats matching ints if both in Union
             if set(type_args).issuperset({int, float}):
                 if value != str(typed_value):
                     continue
@@ -187,7 +193,7 @@ def io_caster(typehint: TypeHint) -> Callable[[str], IOReturn]:
             return sys.stdin.buffer
         file = Path(value)
         if not file.exists():
-            raise ValueError(f"no such file or directory: {value}")
+            raise CastingError(f"no such file or directory: {value}")
         mode: IOMode = 'r' if containstextio(typehint) else 'rb'
         return file.open(mode=mode)
     return caster
@@ -203,7 +209,7 @@ def literal_caster(typehint: TypeHint) -> Callable[[str], Optional[T]]:
                 continue
             if typed_value in type_literals:
                 return typed_value
-        raise ValueError(
+        raise CastingError(
             f'invalid choice: {cast_to_shell(value)} '
             f'(choose from {get_typehint_name(typehint)[1:-1]})')
     return caster

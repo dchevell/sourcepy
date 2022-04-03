@@ -2,7 +2,6 @@ import contextlib
 import os
 import sys
 import textwrap
-
 from pathlib import Path
 
 from casters import cast_to_shell, get_typedef

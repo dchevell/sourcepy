@@ -46,7 +46,7 @@ $ echo $MYVAR
 26636
 $ MYVAR=$(pygrep "I hope errors go to stderr" thisfiledoesnotexist)
 usage: pygrep [-h] [-p Pattern] [-g [file/stdin ...]]
-pygrep: error: argument grepdata: invalid [file/stdin ...] value: ("thisfiledoesnotexist")
+pygrep: error: argument grepdata: no such file or directory: thisfiledoesnotexist
 $ echo $MYVAR
 
 $

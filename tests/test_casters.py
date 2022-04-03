@@ -1,13 +1,13 @@
 import collections.abc as abc
-import io
-import re
 import datetime as dt
+import io
 import pathlib as p
+import re
 import typing as t
 
 import pytest
 
-from casters import cast_to_type, get_typehint_name
+from casters import CastingError, cast_to_type, get_typehint_name
 
 
 
@@ -54,9 +54,9 @@ from casters import cast_to_type, get_typehint_name
     ('1', t.Literal['2', 1], True, 1),
     ('1', t.Literal['2', '1', 1], True, '1'),
     ('get', t.Literal['get', 'set', 'has'], True, 'get'),
-    ('del', t.Literal['get', 'set', 'has'], True, ValueError),
     ('false', t.Literal[True, False], True, False),
     ('1.1', t.Literal[1, 1.1, '1.1'], True, 1.1),
+    ('del', t.Optional[t.Literal['get', 'set', 'has']], True, CastingError),
 
     # Support regex re.Pattern / typing.Pattern type
     ('^abc$', t.Pattern, True, re.compile('^abc$')),

@@ -114,7 +114,7 @@ Sourceable objects
 """
 
 from re import Match, Pattern
-from typing import TextIO, Iterator
+from typing import Iterator, TextIO
 
 
 _CSI = '\x1B['

@@ -2,7 +2,6 @@ import importlib.machinery
 import importlib.util
 import inspect
 import sys
-
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
