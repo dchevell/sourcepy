@@ -4,13 +4,13 @@ Note: this example relies on lxml, which is not part of the standard
 library.
 """
 
-from lxml.html import HtmlElement, fromstring as htmlfromstring
+import lxml.html
 
 __all__ = ['pagetitle']
 
-class HTML(HtmlElement):
-    def __new__(cls, html_string, *args, **kwargs) -> HtmlElement:
-        return htmlfromstring(html_string)
+class HTML(lxml.html.HtmlElement):
+    def __new__(cls, html_string, *args, **kwargs) -> lxml.html.HtmlElement:
+        return lxml.html.fromstring(html_string)
 
 def pagetitle(html: HTML) -> str:
     return html.find('.//title').text

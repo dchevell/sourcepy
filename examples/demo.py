@@ -12,10 +12,11 @@ def stdout_stderr() -> str:
     return 'returned values should go to stdout'
 
 
-def multiply(a: int, b: int) -> int:
+def multiply(x: int, y: int) -> int:
     """Sourcepy will coerce incoming values to ints
     or fail if input is invalid"""
-    return a * b
+    return x * y
+
 
 
 from pathlib import Path
@@ -26,13 +27,15 @@ def fileexists(file: Path) -> bool:
     return file.exists()
 
 
+
 # Variables
 MY_INT = 3 * 7
 FAB_FOUR = ['John', 'Paul', 'George', 'Ringo']
 PROJECT = {'name': 'Sourcepy', 'purpose': 'unknown'}
 
 
-from typing import Optional, Literal
+
+from typing import Literal, Optional
 
 DogActions = Optional[Literal['sit', 'speak', 'drop']]
 

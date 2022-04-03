@@ -2,17 +2,17 @@ import inspect
 import json
 import re
 import sys
-
 from collections.abc import Callable, Collection
 from datetime import date, datetime, time
 from io import IOBase, TextIOBase
 from pathlib import Path
 from re import Pattern
-from typing import (
-    Any, Dict, IO, List, Literal, Optional, Sequence, Set, TextIO, Tuple, Type, TypeVar,
-    Union, get_args, get_origin
-)
-from typing import _Final as TypingBase # type: ignore[attr-defined]
+from typing import (IO, Any, Dict, List, Literal, Optional, Sequence, Set,
+                    TextIO, Tuple, Type, TypeVar, Union)
+from typing import _Final as TypingBase  # type: ignore[attr-defined]
+from typing import get_args, get_origin
+
+
 
 if sys.version_info >= (3, 10):
     from types import UnionType
@@ -36,6 +36,11 @@ TypeMap = Dict[Type[Any], Optional[Dict[Type[Any], Any]]]
 IOMode = Literal['r', 'rb', 'w', 'wb']
 
 
+class CastingError(Exception):
+    """Custom exception for casters
+    """
+
+
 def cast_to_type(value: StringUnion, typehint: Optional[TypeHint] = None, *,
                  strict: bool = False) -> Any:
     typecaster = get_caster(typehint)
@@ -43,12 +48,14 @@ def cast_to_type(value: StringUnion, typehint: Optional[TypeHint] = None, *,
     try:
         typed_value = typecaster(value)
         if typed_value is None:
-            raise ValueError(f"invalid literal for {name}: {value}")
+            raise ValueError
         return typed_value
     except (TypeError, ValueError) as e:
         if strict:
-            raise ValueError(f"invalid literal for {name}: {value}") from e
+            err = f"invalid {name} value: {cast_to_shell(value)}"
+            raise ValueError(err) from e
         return value
+
 
 
 def get_caster(typehint: TypeHint) -> Callable[..., Any]:
@@ -63,8 +70,8 @@ def get_caster(typehint: TypeHint) -> Callable[..., Any]:
     if origin in (Union, UnionType):
         return union_caster(typehint)
     typecasters: Dict[TypeHintTuple, Callable[..., Any]] = {
-        (str,):                     str,
         (bytes,):                   str.encode,
+        (str,):                     str,
         (dict,):                    json_caster(typehint),
         (bool,):                    bool_caster,
         (Sequence, Set):            collection_caster(typehint),
@@ -96,7 +103,7 @@ def union_caster(typehint: TypeHint) -> Callable[[StringUnion], Optional[T]]:
                     typed_value = cast_to_type(value, _type, strict=True)
             except (TypeError, ValueError):
                 continue
-            # prevent float matching ints if both in Union
+            # prevent floats matching ints if both in Union
             if set(type_args).issuperset({int, float}):
                 if value != str(typed_value):
                     continue
@@ -181,13 +188,13 @@ def pattern_caster(typehint: TypeHint) -> Callable[[str], PatternReturn]:
 def io_caster(typehint: TypeHint) -> Callable[[str], IOReturn]:
     def caster(value: str) -> IOReturn:
         if not sys.stdin.isatty():
-            if istextio(typehint):
+            if containstextio(typehint):
                 return sys.stdin
             return sys.stdin.buffer
         file = Path(value)
         if not file.exists():
-            raise ValueError(f"no such file or directory: {value}")
-        mode: IOMode = 'r' if istextio(typehint) else 'rb'
+            raise CastingError(f"no such file or directory: {value}")
+        mode: IOMode = 'r' if containstextio(typehint) else 'rb'
         return file.open(mode=mode)
     return caster
 
@@ -202,7 +209,9 @@ def literal_caster(typehint: TypeHint) -> Callable[[str], Optional[T]]:
                 continue
             if typed_value in type_literals:
                 return typed_value
-        return None
+        raise CastingError(
+            f'invalid choice: {cast_to_shell(value)} '
+            f'(choose from {get_typehint_name(typehint)[1:-1]})')
     return caster
 
 
@@ -277,60 +286,84 @@ def isunion(typehint: TypeHint) -> bool:
 
 
 def isio(typehint: TypeHint) -> bool:
+    return issubtype(typehint, (IO, IOBase))
+
+
+def containsio(typehint: TypeHint) -> bool:
     return containstype(typehint, (IO, IOBase))
 
 
-def istextio(typehint: TypeHint) -> bool:
-    if not isio(typehint):
+def containstextio(typehint: TypeHint) -> bool:
+    if not containsio(typehint):
         return False
     return containstype(typehint, (TextIO, TextIOBase, str))
 
 
 def iscontainer(typehint: TypeHint) -> bool:
-    return containstype(typehint, (Sequence, Set))
+    if issubtype(typehint, (bytes, str)):
+        return False
+    return issubtype(typehint, (Sequence, Set))
 
 
 def get_typehint_name(typehint: TypeHint) -> str:
+    origin = get_origin(typehint)
     if isunion(typehint):
-        names = []
+        names = set()
         type_args = get_args(typehint)
         for _type in type_args:
             if _type == type(None):
                 continue
             name = get_typehint_name(_type)
-            names.append(name)
+            names.add(name)
         return ' | '.join(names)
-    origin = get_origin(typehint)
+    if iscontainer(typehint):
+        base_type = origin or typehint
+        if member_types := get_args(typehint):
+            if issubclass(base_type, tuple) and Ellipsis not in member_types:
+                member_names = [get_typehint_name(t) for t in member_types]
+                name = f'[{", ".join(member_names)}]'
+            else:
+                member_name = get_typehint_name(member_types[0])
+                name = f'[{member_name} ...]'
+            return name
+        return '[...]'
     if origin is Literal:
-        return str(get_args(typehint))[1:-1]
-    if isio(typehint):
-        name = 'file(s)' if issubtype(typehint, Collection) else 'file'
-        return f'{name} / stdin'
+        choices = [cast_to_shell(a) for a in get_args(typehint)]
+        return '{' + ', '.join(choices) + '}'
     if origin is not None:
         return get_typehint_name(origin)
-    if hasattr(typehint, '__name__'):
-        return typehint.__name__
-    return str(typehint)
 
-
-def cast_to_shell(value: object) -> Tuple[str, str]:
-    typedef = ''
-    if isinstance(value, bool):
-        value = str(value).lower()
-    elif isinstance(value, int):
-        typedef = "-i"
-        value = str(value)
-    elif isinstance(value, (tuple, list, set)):
-        shell_array = [cast_to_shell(v)[0] for v in value]
-        value = f'({" ".join(shell_array)})'
-        typedef = '-a'
-    elif isinstance(value, dict):
-        shell_array = [f'[{cast_to_shell(k)[0]}]={cast_to_shell(v)[0]}'
-                       for k, v in value.items()]
-        value = f'({" ".join(shell_array)})'
-        typedef = '-A'
-    elif value is None:
-        value = ''
+    if isio(typehint):
+        name = 'file/stdin'
+    elif hasattr(typehint, '__name__'):
+        name = typehint.__name__
     else:
-        value = f'"{value}"'
-    return value, typedef
+        name = str(typehint)
+    return name
+
+
+def cast_to_shell(value: object) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, (tuple, list, set)):
+        shell_array = [cast_to_shell(v) for v in value]
+        return f"({' '.join(shell_array)})"
+    if isinstance(value, dict):
+        shell_array = [f'[{cast_to_shell(k)}]={cast_to_shell(v)}'
+                       for k, v in value.items()]
+        return f"({' '.join(shell_array)})"
+    if value is None:
+        return ''
+    return f"'{value}'"
+
+
+def get_typedef(value: object) -> str:
+    if isinstance(value, int):
+        return '-i'
+    if isinstance(value, (tuple, list, set)):
+        return '-a'
+    if isinstance(value, dict):
+        return '-A'
+    return ''

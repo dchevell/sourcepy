@@ -35,7 +35,6 @@ def test_pygrep():
     test_command = r'pygrep "^sourcepy\(\)" < sourcepy.sh'
     out, err = run_from_shell(example_script, test_command)
     out = remove_highlight(out)
-    print(out, '#$$$#', err)
     assert 'sourcepy()' in out
     assert len(err) == 0
 
@@ -51,7 +50,42 @@ def test_pygrep():
     assert len(err) > 0
 
 
+def test_help():
+    example_script = 'demo.py'
+    test_command = 'multiply --help'
+    out, err = run_from_shell(example_script, test_command)
+    assert "usage: multiply [-h] [-x int] [-y int]" in err
+    assert "positional or keyword args" in err
+    assert "x (-x, --x)" in err
+    assert "int (required)" in err
 
+    test_command = 'pretzel.do -h'
+    out, err = run_from_shell(example_script, test_command)
+    assert "usage: pretzel.do [-h] [-a {'sit', 'speak', 'drop'}]" in err
+    assert "action (-a, --action)" in err
+    assert "{'sit', 'speak', 'drop'} (default: None)" in err
+
+    example_script = 'pygrep.py'
+    test_command = 'pygrep --help'
+    out, err = run_from_shell(example_script, test_command)
+    assert "usage: pygrep [-h] [-p Pattern] [-g [file/stdin ...]]" in err
+    assert "[file/stdin ...] (required)" in err
+
+
+def test_errors():
+    example_script = 'demo.py'
+    test_command = 'multiply a b'
+    out, err = run_from_shell(example_script, test_command)
+    assert "multiply: error: argument x: invalid int value: 'a'" in err
+
+    test_command = 'pretzel.do fly'
+    out, err = run_from_shell(example_script, test_command)
+    assert "pretzel.do: error: argument action: invalid choice: 'fly' (choose from 'sit', 'speak', 'drop')" in err
+
+    example_script = 'pygrep.py'
+    test_command = 'pygrep "test" thisfiledoesnotexist'
+    out, err = run_from_shell(example_script, test_command)
+    assert "pygrep: error: argument grepdata: no such file or directory: thisfiledoesnotexist" in err
 
 
 # Helpers

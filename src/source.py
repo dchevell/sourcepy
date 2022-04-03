@@ -2,10 +2,9 @@ import contextlib
 import os
 import sys
 import textwrap
-
 from pathlib import Path
 
-from casters import cast_to_shell
+from casters import cast_to_shell, get_typedef
 from loaders import load_path, module_definitions
 
 
@@ -15,7 +14,8 @@ SOURCEPY_BIN = Path(__file__).resolve().parent
 
 
 def make_var(name: str, value: object) -> str:
-    value, typedef = cast_to_shell(value)
+    value = cast_to_shell(value)
+    typedef = get_typedef(value)
     var_def = textwrap.dedent(f"""\
         declare {('-x ' + typedef).strip()} {name}
         {name}={value}

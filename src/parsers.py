@@ -2,18 +2,15 @@ import argparse
 import contextlib
 import inspect
 import sys
-
-from argparse import Action, _ArgumentGroup as ArgumentGroup
+from argparse import Action
+from argparse import _ArgumentGroup as ArgumentGroup
 from collections.abc import Callable, ValuesView
 from inspect import Parameter
-from typing import (
-    Any, Dict, Iterator, List, Literal, Optional, Tuple, Type, TypedDict, Union,
-    get_args, get_origin
-)
+from typing import (Any, Dict, Iterator, List, Literal, Optional, Tuple, Type,
+                    TypedDict, Union, get_args, get_origin)
 
-from casters import (
-    cast_to_type, iscontainer, isio, issubtype, get_typehint_name
-)
+from casters import (CastingError, cast_to_type, containsio, get_typehint_name,
+                     iscontainer, issubtype)
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -25,6 +22,7 @@ else:
 
 STDIN = '==STDIN==' # placeholder for stdin
 
+ArgNames = Dict[str, Union[Tuple[str], Tuple[str, str]]]
 NumArgs = Optional[Union[int, Literal['*']]]
 OptionsAction = Optional[Union[str, Type[Action]]]
 OptionsNargs = Optional[Union[int, str]]
@@ -36,20 +34,33 @@ ParserReturn = Union[bool, str, List[str]]
 class _ArgOptions(TypedDict, total=False):
     default: str
     action: Union[str, Type[Action]]
-    choices: List[Any]
     metavar: str
     nargs: Union[int, str]
     help: str
 
 
-class WideFormatter(argparse.RawTextHelpFormatter):
-    """Argparse help text formatter with a higher default indent
-    position to make more room for positional-or-kwarg options text.
+class SourcepyFormatter(argparse.HelpFormatter):
+    """Custom argparse help text formatter
     """
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if 'max_help_position' not in kwargs:
             kwargs['max_help_position'] = 36
         super().__init__(*args, **kwargs)
+
+    def _format_action_invocation(self, action: Action) -> str:
+        options = ', '.join(action.option_strings)
+        if action.dest == 'help':
+            return options
+        name, = self._metavar_formatter(action, action.dest)(1)
+        if name and options:
+            return f'{name} ({options})'
+        return name + options
+
+    def _format_args(self, action: Action, default_metavar: str) -> str:
+        helptext = action.help or ''
+        usage_idx = helptext.find(' (')
+        arg_usage = helptext[:usage_idx]
+        return arg_usage
 
 
 class FunctionParameterParser(argparse.ArgumentParser):
@@ -64,10 +75,12 @@ class FunctionParameterParser(argparse.ArgumentParser):
         if 'description' not in kwargs:
             kwargs['description'] = inspect.getdoc(fn)
         if 'formatter_class' not in kwargs:
-            kwargs['formatter_class'] = WideFormatter
+            kwargs['formatter_class'] = SourcepyFormatter
         super().__init__(**kwargs)
         self.params = inspect.signature(fn).parameters.values()
         self.groups: Dict[str, ArgumentGroup] = {}
+        self.arg_names: ArgNames = {}
+        self.generate_arg_names()
         self.generate_args()
 
     def generate_args(self) -> None:
@@ -83,30 +96,37 @@ class FunctionParameterParser(argparse.ArgumentParser):
             title = 'keyword only'
             self.groups[title] = self.make_args_group(title, params)
 
+    def generate_arg_names(self) -> None:
+        used_short_flags = ['-h']
+        for param in self.params:
+            flag = '--' + param.name.replace('_', '-')
+            if param in positional_only(self.params):
+                if not param is stdin_target(self.params):
+                    self.arg_names[param.name] = (param.name,)
+                    continue
+            short_flag = '-' + param.name.replace('_', '')[:1]
+            if short_flag not in used_short_flags:
+                used_short_flags.append(short_flag)
+                self.arg_names[param.name] = (short_flag, flag)
+            if param.name not in self.arg_names:
+                self.arg_names[param.name] = (flag,)
+
     def make_args_group(self, title: str, params: List[Parameter]) -> ArgumentGroup:
         group = self.add_argument_group(f'{title} args')
         for param in params:
-            if param in positional_only(params) and param is not stdin_target(params):
-                # If stdin is targeting a positional only arg, make into
-                # option (i.e. --foo) to avoid positional parsing ambiguities.
-                # We'll restore position during parsing
-                name = param.name
-            else:
-                name = '--' + param.name.replace('_', '-')
+            name = self.arg_names[param.name]
             options: _ArgOptions = {}
             if default := self.options_default(param):
                 options['default'] = default
             if action := self.options_action(param):
                 options['action'] = action
-            if choices := self.options_choices(param):
-                options['choices'] = choices
-            if metavar := self.options_metavar(param):
+            if (metavar := self.options_metavar(param)) is not None:
                 options['metavar'] = metavar
             if nargs := self.options_nargs(param):
                 options['nargs'] = nargs
             if helptext := self.options_help(param):
                 options['help'] = helptext
-            group.add_argument(name, **options)
+            group.add_argument(*name, **options)
         return group
 
     def options_default(self, param: Parameter) -> Optional[str]:
@@ -122,20 +142,9 @@ class FunctionParameterParser(argparse.ArgumentParser):
             return BooleanOptionalAction
         return None
 
-    def options_choices(self, param: Parameter) -> Optional[List[Any]]:
-        if isbooleanaction(param) and param in positional_only(self.params):
-            choices = ['true', 'false']
-            return choices
-        if get_origin(param.annotation) is Literal:
-            choices = list(get_args(param.annotation))
-            return choices
-        return None
-
     def options_metavar(self, param: Parameter) -> str:
-        if param in positional_only(self.params):
+        if param not in keyword_only(self.params):
             return param.name
-        if param in positional_or_keyword(self.params):
-            return f'/ {param.name}'
         return ''
 
     def options_nargs(self, param: Parameter) -> OptionsNargs:
@@ -172,9 +181,9 @@ class FunctionParameterParser(argparse.ArgumentParser):
                 continue
             try:
                 value = self.typecaster(parsed[param.name], param)
-            except (ValueError, TypeError) as e:
-                self.error(str(e))
-            if isio(param.annotation) and sys.stdin.isatty():
+            except (CastingError, ValueError) as e:
+                self.error(f'argument {param.name}: {e}')
+            if containsio(param.annotation) and sys.stdin.isatty():
                 handles = value if iscontainer(type(value)) else [value]
                 open_handles.extend(handles)
             if param not in positional_only(self.params):
@@ -225,7 +234,7 @@ class FunctionParameterParser(argparse.ArgumentParser):
         typehint = get_typehint(param)
         strict = typehint is param.annotation
         implicit_stdin = None
-        if param is stdin_target(self.params) and not isio(typehint):
+        if param is stdin_target(self.params) and not containsio(typehint):
             implicit_stdin = sys.stdin.read().rstrip()
         if implicit_stdin is not None:
             value = implicit_stdin
@@ -252,7 +261,7 @@ def stdin_target(params: ParamsList) -> Optional[Parameter]:
     for param in params:
         if sys.stdin.isatty():
             return None
-        if isio(param.annotation):
+        if containsio(param.annotation):
             return param
     if len(params) == len(keyword_only(params)):
         return None

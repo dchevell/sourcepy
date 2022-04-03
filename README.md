@@ -17,7 +17,6 @@ from typing import TextIO
 def pygrep(pattern: Pattern, grepdata: list[TextIO]):
     """
     A minimal grep implementation in Python
-    illustrating some interesting Sourcepy features.
     """
     for file in grepdata:
         prefix = f'{file.name}:' if len(grepdata) > 1 else ''
@@ -30,17 +29,16 @@ $ source pygrep.py
 $ pygrep "implementation" pygrep.py
     A minimal grep implementation in Python
 $ pygrep --help
-usage: pygrep [-h] [--pattern / pattern] [--grepdata [/ grepdata ...]]
+usage: pygrep [-h] [-p Pattern] [-g [file/stdin ...]]
 
-    A minimal grep implementation in Python
-    illustrating some interesting Sourcepy features.
+A minimal grep implementation in Python
 
 options:
-  -h, --help                   show this help message and exit
+  -h, --help                 show this help message and exit
 
 positional or keyword args:
-  --pattern / pattern          Pattern (required)
-  --grepdata [/ grepdata ...]  file(s) / stdin (required)
+  pattern (-p, --pattern)    Pattern (required)
+  grepdata (-g, --grepdata)  [file/stdin ...] (required)
 $ echo "one\ntwo\nthree" | pygrep --pattern "o"
 one
 two
@@ -48,8 +46,8 @@ $ MYVAR=$(echo $RANDOM | pygrep "\d")
 $ echo $MYVAR
 26636
 $ MYVAR=$(pygrep "I hope errors go to stderr" thisfiledoesnotexist)
-usage: pygrep [-h] [--pattern / pattern] [--grepdata [/ grepdata ...]]
-pygrep: error: invalid literal for list[typing.TextIO]: ['thisfiledoesnotexist']
+usage: pygrep [-h] [-p Pattern] [-g [file/stdin ...]]
+pygrep: error: argument grepdata: no such file or directory: thisfiledoesnotexist
 $ echo $MYVAR
 
 $
@@ -131,19 +129,18 @@ agnostic way.
 
 ```python
 # demo.py
-def multiply(a: int, b: int) -> int:
+def multiply(x: int, y: int) -> int:
     """Sourcepy will coerce incoming values to ints
     or fail if input is invalid"""
-    return a * b
+    return x * y
 ```
 ```shell
 $ source demo.py
 $ multiply 3 4
 12
-
 $ multiply a b
-usage: multiply [-h] [--a / a] [--b / b]
-multiply: error: invalid literal for <class 'int'>: a
+usage: multiply [-h] [-x int] [-y int]
+multiply: error: argument x: invalid int value: "a"
 ```
 ```python
 # demo.py
@@ -153,9 +150,9 @@ def fileexists(file: Path) -> bool:
     return file.exists()
 ```
 ```shell
-$ fileexists domath.py
+$ fileexists demo.py
 true
-$ fileexists dontmath.py
+$ fileexists nemo.py
 false
 ```
 
@@ -167,13 +164,13 @@ an object and overriding `__new__`
 
 ```python
 # pagetitle.py
-from lxml.html import HtmlElement, fromstring as htmlfromstring
+import lxml.html
 
 __all__ = ['pagetitle']
 
-class HTML(HtmlElement):
-    def __new__(cls, html_string, *args, **kwargs) -> HtmlElement:
-        return htmlfromstring(html_string)
+class HTML(lxml.html.HtmlElement):
+    def __new__(cls, html_string, *args, **kwargs) -> lxml.html.HtmlElement:
+        return lxml.html.fromstring(html_string)
 
 def pagetitle(html: HTML) -> str:
     return html.find('.//title').text
@@ -210,7 +207,8 @@ This is Sourcepy and its primary purpose is unknown
 ### Class instances
 
 ```python
-from typing import Optional, Literal
+# demo.py
+from typing import Literal, Optional
 
 DogActions = Optional[Literal['sit', 'speak', 'drop']]
 
@@ -238,6 +236,14 @@ $ pretzel.do
 Pretzel looked at you expectantly
 $ echo "My dog ${pretzel[name]} is ${pretzel[age]} years old"
 My dog Pretzel is 7 years old
+$ pretzel.do -h
+usage: pretzel.do [-h] [-a {'sit', 'speak', 'drop'}]
+
+options:
+  -h, --help             show this help message and exit
+
+positional or keyword args:
+  action (-a, --action)  {'sit', 'speak', 'drop'} (default: None)
 ```
 
 
