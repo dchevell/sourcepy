@@ -14,8 +14,8 @@ SOURCEPY_BIN = Path(__file__).resolve().parent
 
 
 def make_var(name: str, value: object) -> str:
-    value = cast_to_shell(value)
     typedef = get_typedef(value)
+    value = cast_to_shell(value)
     var_def = textwrap.dedent(f"""\
         declare {('-x ' + typedef).strip()} {name}
         {name}={value}
