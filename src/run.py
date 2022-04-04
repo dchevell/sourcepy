@@ -8,7 +8,7 @@ from parsers import FunctionParameterParser
 
 
 
-def run_from_stub(module_path: Path, fn_string: str, raw_args: List[str]) -> None:
+def run_from_wrapper(module_path: Path, fn_string: str, raw_args: List[str]) -> None:
     with contextlib.redirect_stdout(sys.stderr):
         module = load_path(module_path)
         fn = get_callable(module, fn_string)
@@ -42,7 +42,7 @@ def main() -> None:
     module_path = Path(sys.argv[1])
     fn_string = sys.argv[2]
     raw_args = sys.argv[3:]
-    run_from_stub(module_path, fn_string, raw_args)
+    run_from_wrapper(module_path, fn_string, raw_args)
 
 
 if __name__ == '__main__':

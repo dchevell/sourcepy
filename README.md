@@ -114,7 +114,7 @@ git clone https://github.com/dchevell/sourcepy.git ~/.sourcepy
 Then simply add `source ~/.sourcepy/sourcepy.sh` to your shell profile, e.g.
 `.zprofile` or `.bash_profile`. If you'd prefer to clone this folder to a
 different location you can, however a `~/.sourcepy` folder will still be
-created to generate module stubs when sourcing python files.
+created to generate module wrappers when sourcing python files.
 
 Sourcepy is not a normal package that is installed into a specific environment.
 It has no dependencies and can be run by any Python 3.8+ interpreter, so a

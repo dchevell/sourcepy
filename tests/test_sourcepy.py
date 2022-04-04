@@ -55,6 +55,7 @@ def test_variables():
 
     test_command = 'echo $MY_INT; MY_INT=6*7; echo $MY_INT'
     out, err = run_from_shell(example_script, test_command)
+    print(out, err)
     assert '21' in out
     assert '42' in out
     assert len(err) == 0
@@ -121,8 +122,9 @@ def run_from_shell(example_script, test_command):
     """Sets up Sourcepy and sources `example_script`, then runs
     the specified command from the top level directory
     """
+    shell = os.environ.get('SHELL', 'bash')
     command = f"""\
-        zsh -c '
+        {shell} -c '
             source sourcepy.sh;
             source examples/{example_script};
             {test_command};

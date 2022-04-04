@@ -17,7 +17,7 @@ def make_var(name: str, value: object) -> str:
     typedef = get_typedef(value)
     value = cast_to_shell(value)
     var_def = textwrap.dedent(f"""\
-        declare {('-x ' + typedef).strip()} {name}
+        declare {('-g ' + typedef).strip()} {name}
         {name}={value}
     """)
     return var_def
@@ -41,8 +41,8 @@ def make_runner(runner_name: str, module_path: Path) -> str:
     return runner
 
 
-def make_stub_name(path: Path) -> str:
-    """Return an escaped filename to be used in source stubs.
+def make_wrapper_name(path: Path) -> str:
+    """Return an escaped filename to be used in source wrappers.
     Reverses the order of parts from the original filepath for
     easier readability
     """
@@ -52,41 +52,41 @@ def make_stub_name(path: Path) -> str:
     return escaped + '.sh'
 
 
-def build_stub(module_path: Path) -> str:
-    stub_contents = []
+def build_wrapper(module_path: Path) -> str:
+    wrapper_contents = []
 
     module = load_path(module_path)
-    stub_title = f'SourcePy stub for {module.__name__} ({module_path})'
-    stub_contents.append(textwrap.dedent(f"""\
-        ######{"#" * len(stub_title)}######
-        ##### {stub_title} #####
-        ######{"#" * len(stub_title)}######
+    wrapper_title = f'Sourcepy wrapper for {module.__name__} ({module_path})'
+    wrapper_contents.append(textwrap.dedent(f"""\
+        ######{"#" * len(wrapper_title)}######
+        ##### {wrapper_title} #####
+        ######{"#" * len(wrapper_title)}######
     """))
 
     runner_name = f'_sourcepy_run_{hash(module)}'
     runner = make_runner(runner_name, module_path)
-    stub_contents.append('# SourcePy runner')
-    stub_contents.append(runner)
+    wrapper_contents.append('# Sourcepy runner')
+    wrapper_contents.append(runner)
 
-    stub_contents.append('\n# Definitions')
+    wrapper_contents.append('\n# Definitions')
     for obj_definition in module_definitions(module):
         name = obj_definition['name']
         if obj_definition['type'] == 'function':
             fn_def = make_fn(name, runner_name)
-            stub_contents.append(fn_def)
+            wrapper_contents.append(fn_def)
         elif obj_definition['type'] == 'variable':
             var_def = make_var(name, obj_definition['value'])
-            stub_contents.append(var_def)
-    stub = '\n'.join(stub_contents)
-    return stub
+            wrapper_contents.append(var_def)
+    wrapper = '\n'.join(wrapper_contents)
+    return wrapper
 
 
-def write_stub_file(stub_contents: str, stub_name: str) -> Path:
-    stub_file = SOURCEPY_HOME / 'stubs' / stub_name
-    stub_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(stub_file, 'w', encoding='utf-8') as f:
-        f.write(stub_contents)
-    return stub_file
+def write_wrapper_file(wrapper_contents: str, wrapper_name: str) -> Path:
+    wrapper_file = SOURCEPY_HOME / 'wrappers' / wrapper_name
+    wrapper_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(wrapper_file, 'w', encoding='utf-8') as f:
+        f.write(wrapper_contents)
+    return wrapper_file
 
 
 def main() -> None:
@@ -94,10 +94,10 @@ def main() -> None:
         sys.exit("sourcepy: not enough arguments")
     with contextlib.redirect_stdout(sys.stderr):
         module_path = Path(sys.argv[1]).resolve()
-        stub_contents = build_stub(module_path)
-        stub_name = make_stub_name(module_path)
-        stub_file = write_stub_file(stub_contents, stub_name)
-    print(stub_file)
+        wrapper_contents = build_wrapper(module_path)
+        wrapper_name = make_wrapper_name(module_path)
+        wrapper_file = write_wrapper_file(wrapper_contents, wrapper_name)
+    print(wrapper_file)
 
 
 if __name__ == '__main__':

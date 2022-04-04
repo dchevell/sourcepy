@@ -21,7 +21,7 @@ env.json
 build-output/
 .vscode/
 .nebulae/
-stubs/
+wrappers/
 .dmypy.json
 tests/*.xml
 
