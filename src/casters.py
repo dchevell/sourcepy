@@ -4,6 +4,7 @@ import re
 import sys
 from collections.abc import Callable, Collection
 from datetime import date, datetime, time
+from enum import Enum
 from io import IOBase, TextIOBase
 from pathlib import Path
 from re import Pattern
@@ -79,6 +80,7 @@ def get_caster(typehint: TypeHint) -> Callable[..., Any]:
         (Pattern,):                 pattern_caster(typehint),
         (IO, IOBase):               io_caster(typehint),
         (Literal,):                 literal_caster(typehint),
+        (Enum,):                    enum_caster(typehint),
     }
     for cls, caster in typecasters.items():
         if typehint in cls:
@@ -218,6 +220,20 @@ def literal_caster(typehint: TypeHint) -> Callable[[str], Optional[T]]:
     return caster
 
 
+def enum_caster(typehint: TypeHint) -> Callable[[str], Optional[Enum]]:
+    def caster(value: str) -> Optional[Enum]:
+        try:
+            typed_value = typehint[value]
+            if isinstance(typed_value, Enum):
+                return typed_value
+        except KeyError:
+            pass
+        raise CastingError(
+            f'invalid choice: {cast_to_shell(value)} '
+            f'(choose from {get_typehint_name(typehint)[1:-1]})')
+    return caster
+
+
 def untyped_caster(value: str) -> Union[bool, int, str]:
     if value in ['true', 'false']:
         return value == 'true'
@@ -330,8 +346,9 @@ def get_typehint_name(typehint: TypeHint) -> str:
                 name = f'[{member_name} ...]'
             return name
         return '[...]'
-    if origin is Literal:
-        choices = [cast_to_shell(a) for a in get_args(typehint)]
+    if origin is Literal or issubtype(typehint, Enum):
+        members = get_args(typehint) or [i.name for i in typehint]
+        choices = [cast_to_shell(a) for a in members]
         return '{' + ', '.join(choices) + '}'
     if origin is not None:
         return get_typehint_name(origin)

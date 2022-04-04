@@ -46,11 +46,31 @@ class Dog:
 
     def do(self, action: DogActions = None) -> str:
         if action == 'sit':
-            return f'{self.name} sat down'
+            return f"{self.name} sat down"
         if action == 'speak':
-            return f'{self.name} said: bark bark bark'
+            return f"{self.name} said: bark bark bark"
         if action == 'drop':
-            return f'{self.name} said: Drop what?'
-        return f'{self.name} looked at you expectantly'
+            return f"{self.name} said: Drop what?"
+        return f"{self.name} looked at you expectantly"
 
 pretzel = Dog('Pretzel', 7)
+
+
+
+from enum import Enum
+
+class Colour(Enum):
+    RED = 'red'
+    GREEN = 'green'
+    BLUE = 'blue'
+
+def favouritecolour(colour: Colour) -> str:
+    match colour:
+        case Colour.RED:
+            return "I like the colour red"
+        case Colour.GREEN:
+            return "Green is my favourite colour"
+        case Colour.BLUE:
+            return "I prefer the colour blue"
+        case _:
+            raise ValueError("I see too many colours")

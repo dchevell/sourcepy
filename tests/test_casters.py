@@ -1,5 +1,6 @@
 import collections.abc as abc
 import datetime as dt
+import enum
 import io
 import pathlib as p
 import re
@@ -9,6 +10,12 @@ import pytest
 
 from casters import CastingError, cast_to_type, get_typehint_name
 
+
+
+class Colour(enum.Enum):
+    RED = 'red'
+    GREEN = 'green'
+    BLUE = 'blue'
 
 
 @pytest.mark.parametrize(
@@ -57,6 +64,10 @@ from casters import CastingError, cast_to_type, get_typehint_name
     ('false', t.Literal[True, False], True, False),
     ('1.1', t.Literal[1, 1.1, '1.1'], True, 1.1),
     ('del', t.Optional[t.Literal['get', 'set', 'has']], True, CastingError),
+
+    # Support enums
+    ('RED', Colour, True, Colour.RED),
+    ('YELLOW', Colour, True, CastingError),
 
     # Support regex re.Pattern / typing.Pattern type
     ('^abc$', t.Pattern, True, re.compile('^abc$')),
@@ -169,7 +180,10 @@ def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_mode, expecte
 
         # Literals
         (t.Literal['get', 'set', 'del'], "{'get', 'set', 'del'}"),
-        (t.Literal[0, 1, True, False], '{0, 1, true, false}')
+        (t.Literal[0, 1, True, False], '{0, 1, true, false}'),
+
+        # Enums
+        (Colour, "{'RED', 'GREEN', 'BLUE'}"),
 
 ))
 def test_get_typehint_name(typehint, name):
