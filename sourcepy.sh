@@ -10,8 +10,8 @@
 
 sourcepy() {
     local python_bin=${PYTHON_BIN:-$(which python3)}
-    local module_stub=$($python_bin ${SOURCEPY_BIN}/source.py $1)
-    builtin source $module_stub
+    local module_wrapper=$($python_bin ${SOURCEPY_BIN}/source.py $1)
+    builtin source $module_wrapper
 }
 
 if $SOURCEPY_OVERLOAD_SOURCE
