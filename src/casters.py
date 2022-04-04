@@ -98,7 +98,7 @@ def union_caster(typehint: TypeHint) -> Callable[[StringUnion], Optional[T]]:
                 if (isinstance(value, list)
                     and not issubtype(_type, Collection)
                     and len(value) == 1):
-                    typed_value = cast_to_type(value[0], _type, strict=True)
+                    typed_value: T = cast_to_type(value[0], _type, strict=True)
                 else:
                     typed_value = cast_to_type(value, _type, strict=True)
             except (TypeError, ValueError):
@@ -120,7 +120,8 @@ def generic_caster(typehint: TypeHint) -> Callable[[str], Union[T, str]]:
     know how to handle a type. """
     def caster(value: str) -> Union[T, str]:
         try:
-            return typehint(value)
+            typed_value: T = typehint(value)
+            return typed_value
         except TypeError:
             return value
     return caster
@@ -135,7 +136,7 @@ def bool_caster(value: str) -> Optional[bool]:
 def json_caster(typehint: TypeHint) -> Callable[[str], JSONReturn]:
     def caster(value: str) -> JSONReturn:
         try:
-            json_value = json.loads(value)
+            json_value: JSONReturn = json.loads(value)
             if istype(type(json_value), (typehint, get_origin(typehint))):
                 return json_value
         except json.decoder.JSONDecodeError:
@@ -172,8 +173,10 @@ def collection_caster(typehint: TypeHint) -> Callable[[StringUnion], CollectionR
 def datetime_caster(typehint: TypeHint) -> Callable[[str], DateTimeReturn]:
     def caster(value: str) -> DateTimeReturn:
         if value.isdecimal() and issubtype(typehint, date):
-            return typehint.fromtimestamp(int(value))
-        return typehint.fromisoformat(value)
+            typed_value: DateTimeReturn = typehint.fromtimestamp(int(value))
+            return typed_value
+        typed_value = typehint.fromisoformat(value)
+        return typed_value
     return caster
 
 
@@ -204,7 +207,7 @@ def literal_caster(typehint: TypeHint) -> Callable[[str], Optional[T]]:
         type_literals = get_args(typehint)
         for lit in type_literals:
             try:
-                typed_value = cast_to_type(value, type(lit), strict=True)
+                typed_value: T = cast_to_type(value, type(lit), strict=True)
             except (TypeError, ValueError):
                 continue
             if typed_value in type_literals:

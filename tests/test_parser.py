@@ -19,6 +19,12 @@ from parsers import FunctionParameterParser
     (['test', '1', '--no-three'], (
         (), {'one': 'test', 'two': 1, 'three': False}
     )),
+    (['--one', 'test', '--two', '1', '--no-three', '--four', 'a', 'b', 'c'], (
+        (), {'one': 'test', 'two': 1, 'three': False, 'four': ['a', 'b', 'c']}
+    )),
+    (['--one=test', '--two=1', '--no-three'], (
+        (), {'one': 'test', 'two': 1, 'three': False}
+    )),
     (['test', '1', 'a', 'b', 'c'], SystemExit),
     (['test', 'test', 'test', 'test'], SystemExit),
 ))

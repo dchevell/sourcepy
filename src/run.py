@@ -26,13 +26,14 @@ def print_result(result: object) -> None:
             print_result(line)
         return
 
-    write = sys.__stdout__.write
+    stdout = sys.__stdout__
     out = str(result)
     if isinstance(result, bool):
         out = out.lower()
     if not out.endswith('\n'):
         out += '\n'
-    write(out)
+    stdout.write(out)
+    stdout.flush()
 
 
 def main() -> None:
