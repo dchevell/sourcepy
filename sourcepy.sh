@@ -36,7 +36,7 @@ currentshell() {
     local shell=$(ps -o comm= -p $$ 2> /dev/null)
     if [[ -n $shell ]]
     then
-        echo ${shell//-/}
+        echo ${shell//-/} | sed 's:.*/::'
         return
     fi
     if [[ -n $ZSH_VERSION ]]
