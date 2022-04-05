@@ -13,8 +13,6 @@ from typing import (IO, Any, Dict, List, Literal, Optional, Sequence, Set,
 from typing import _Final as TypingBase  # type: ignore[attr-defined]
 from typing import get_args, get_origin
 
-
-
 if sys.version_info >= (3, 10):
     from types import UnionType
 else:

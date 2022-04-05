@@ -1,3 +1,4 @@
+import asyncio
 from io import BytesIO, TextIOWrapper
 from typing import (Any, BinaryIO, DefaultDict, Dict, List, Literal, Optional,
                     Set, TextIO, Tuple, Union)
@@ -340,6 +341,42 @@ def test_parser_literals(cmd_args, expected_result, monkeypatch):
 
     def myfn(one: Literal['get', 'set', 'del'], /, two: Optional[Literal[0, 1, True, False]]):
         return one, two
+
+    monkeypatch.setattr('sys.stdin.isatty', lambda: True)
+    parser = FunctionParameterParser(myfn)
+    if isinstance(expected_result, type) and issubclass(expected_result, BaseException):
+        with pytest.raises(expected_result):
+            with parser.parse_fn_args(cmd_args):
+                pass
+    else:
+        with parser.parse_fn_args(cmd_args) as (args, kwargs):
+            assert expected_result == (args, kwargs)
+
+
+@pytest.mark.parametrize(
+    'cmd_args, expected_result', (
+    (['test', '1', 'true', 'a', 'b c', 'd'], (
+        (), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b c', 'd']}
+    )),
+    (['test', '1', '--three', 'a', 'b', 'c'],  (
+        (), {'one': 'test', 'two': 1, 'three': True, 'four': ['a', 'b', 'c']}
+    )),
+    (['test', '1', '--no-three'], (
+        (), {'one': 'test', 'two': 1, 'three': False}
+    )),
+    (['--one', 'test', '--two', '1', '--no-three', '--four', 'a', 'b', 'c'], (
+        (), {'one': 'test', 'two': 1, 'three': False, 'four': ['a', 'b', 'c']}
+    )),
+    (['--one=test', '--two=1', '--no-three'], (
+        (), {'one': 'test', 'two': 1, 'three': False}
+    )),
+    (['test', '1', 'a', 'b', 'c'], SystemExit),
+    (['test', 'test', 'test', 'test'], SystemExit),
+))
+def test_parser_asyncio(cmd_args, expected_result, monkeypatch):
+
+    async def myfn(one: str, two: float, three: bool = False, four: Optional[list] = None):
+        return one, two, three, four
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     parser = FunctionParameterParser(myfn)

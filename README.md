@@ -84,7 +84,7 @@ arguments, shell programs often allow these to be intermixed.
 Type hints can be used to coerce input values into their corresponding types.
 Sourcepy provides extensive support for many possible use cases, including
 collections (`list`s, `set`s, `tuple`s etc), `Union`s, IO streams (files and
-stdin)
+stdin).
 
 ### Stdin support
 
@@ -92,6 +92,10 @@ Sourcepy will detect stdin and implicitly route its contents to the first
 parameter of functions. Where greater control is desired, standard `IO` type
 hints can be used to target stdin at different arguments and to receive the
 `sys.stdin` (text IO) or `sys.stdin.buffer` (binary IO) handles directly.
+
+### asyncio support
+
+Sourcepy has full support for asyncio syntax, e.g. `async def` functions.
 
 ## Requirements
 
@@ -206,6 +210,10 @@ This is Sourcepy and its primary purpose is unknown
 
 ### Class instances
 
+Sourcepy will make class instance methods available at `instancename.methodname`
+and even makes class instance attributes available inside an associative array
+named for the instance.
+
 ```python
 # demo.py
 from typing import Literal, Optional
@@ -244,6 +252,58 @@ options:
 
 positional or keyword args:
   action (-a, --action)  {'sit', 'speak', 'drop'} (default: None)
+```
+
+### AsyncIO
+
+AsyncIO code produces the same behaviour, and is run via `asyncio.run(yourfn())`
+when called by Sourcepy:
+
+```python
+# asynciodemo.py
+"""Asyncio example taken from https://docs.python.org/3/library/asyncio-task.html
+"""
+import asyncio
+import time
+
+async def say_after(delay, what):
+    await asyncio.sleep(delay)
+    print(what)
+
+async def main():
+    task1 = asyncio.create_task(
+        say_after(1, 'hello'))
+
+    task2 = asyncio.create_task(
+        say_after(2, 'world'))
+
+    print(f"started at {time.strftime('%X')}")
+
+    # Wait until both tasks are completed (should take
+    # around 2 seconds.)
+    await task1
+    await task2
+
+    print(f"finished at {time.strftime('%X')}")
+```
+```shell
+$ say_after -h
+usage: say_after [-h] [-d] [-w]
+
+options:
+  -h, --help           show this help message and exit
+
+positional or keyword args:
+  delay (-d, --delay)  (required)
+  what (-w, --what)    (required)
+$ say_after 1 hi
+hi
+$ time (main)
+started at 12:29:53
+hello
+world
+finished at 12:29:55
+( main; )  0.09s user 0.02s system 5% cpu 2.123 total
 ```
 
 

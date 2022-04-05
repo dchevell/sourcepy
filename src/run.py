@@ -1,11 +1,17 @@
+import asyncio
 import contextlib
+import inspect
 import sys
 from pathlib import Path
-from typing import Generator, Iterator, List
+from typing import (Any, Awaitable, Callable, Dict, Generator, Iterator, List,
+                    TypeGuard, TypeVar)
 
 from loaders import get_callable, load_path
 from parsers import FunctionParameterParser
 
+
+
+T = TypeVar('T')
 
 
 def run_from_wrapper(module_path: Path, fn_string: str, raw_args: List[str]) -> None:
@@ -14,8 +20,18 @@ def run_from_wrapper(module_path: Path, fn_string: str, raw_args: List[str]) -> 
         fn = get_callable(module, fn_string)
         parser = FunctionParameterParser(fn, fn_string)
         with parser.parse_fn_args(raw_args) as (args, kwargs):
-            result = fn(*args, **kwargs)
+            result = caller(fn, *args, **kwargs)
             print_result(result)
+
+
+def caller(fn: Callable[..., T], *args: List[Any], **kwargs: Dict[str, Any]) -> T:
+    if isawaitablefn(fn):
+        return asyncio.run(fn(*args, **kwargs))
+    return fn(*args, **kwargs)
+
+
+def isawaitablefn(obj: Callable[..., T]) -> TypeGuard[Callable[..., Awaitable[T]]]:
+    return inspect.iscoroutinefunction(obj)
 
 
 def print_result(result: object) -> None:

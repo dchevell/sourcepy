@@ -132,6 +132,31 @@ def test_errors():
 
 
 
+def test_asyncio():
+    example_script = 'asynciodemo.py'
+
+    test_command = 'say_after 1 test123'
+    out, err = run_from_shell(example_script, test_command)
+    assert "test123" in err
+    assert len(out) == 0 # the asyncio only prints and returns nothing, so stdout will always be blank
+
+    test_command = 'main'
+    out, err = run_from_shell(example_script, test_command)
+    assert "started at" in err
+    assert "hello" in err
+    assert "world" in err
+    assert "finished at" in err
+    assert len(out) == 0
+
+    test_command = 'say_after -h'
+    out, err = run_from_shell(example_script, test_command)
+    assert "say_after [-h] [-d] [-w]" in err
+    assert "delay (-d, --delay)" in err
+    assert "what (-w, --what)" in err
+    assert len(out) == 0
+
+
+
 # Helpers
 
 def run_from_shell(example_script, test_command):

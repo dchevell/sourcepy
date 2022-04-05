@@ -9,8 +9,8 @@ from inspect import Parameter
 from typing import (Any, Dict, Iterator, List, Literal, Optional, Tuple, Type,
                     TypedDict, Union, get_args, get_origin)
 
-from casters import (CastingError, cast_to_type, containsio, get_typehint_name,
-                     iscontainer, issubtype)
+from casters import (CastingError, TypeHint, cast_to_type, containsio,
+                     get_typehint_name, iscontainer, issubtype)
 
 # Fall back on regular boolean action < Python 3.9
 if sys.version_info >= (3, 9):
@@ -59,6 +59,8 @@ class SourcepyFormatter(argparse.HelpFormatter):
     def _format_args(self, action: Action, default_metavar: str) -> str:
         helptext = action.help or ''
         usage_idx = helptext.find(' (')
+        if usage_idx == -1:
+            return ''
         arg_usage = helptext[:usage_idx]
         return arg_usage
 
@@ -292,9 +294,9 @@ def get_nargs(param: Parameter) -> NumArgs:
     return None
 
 
-def get_typehint(param: Parameter) -> object:
+def get_typehint(param: Parameter) -> Optional[TypeHint]:
     if param.annotation not in(param.empty, Any):
         return param.annotation
     if param.default is not param.empty:
         return type(param.default)
-    return param.empty
+    return None#param.empty
