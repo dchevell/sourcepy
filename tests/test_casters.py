@@ -1,10 +1,11 @@
-import collections.abc as abc
 import datetime as dt
+import decimal as d
 import enum
 import io
 import pathlib as p
 import re
 import typing as t
+from collections import abc
 
 import pytest
 
@@ -98,6 +99,10 @@ class Colour(enum.Enum):
     # TextIO stream from file
     ('/dev/null', t.TextIO, True, io.TextIOBase),
     ('/dev/null', t.BinaryIO, True, io.BufferedIOBase),
+
+    # Support single-arg types Sourcepy does not know about
+    ('1.1', d.Decimal, True, d.Decimal('1.1')),
+    ('/dev/null', p.Path, True, p.Path('/dev/null')),
 ))
 def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
@@ -114,18 +119,18 @@ def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
 
 
 @pytest.mark.parametrize(
-    'value, typehint, expected_mode, expected_result', (
+    'value, typehint, expected_result', (
     # IO stream from stdin
-    (io.BytesIO(b'a b'),    t.BinaryIO,         'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    t.TextIO,           'r',    'a b'),
-    (io.BytesIO(b'a b'),    t.IO[bytes],        'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    t.IO[str],          'r',    'a b'),
-    (io.BytesIO(b'a b'),    io.BufferedIOBase,  'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    io.TextIOBase,      'r',    'a b'),
-    (io.BytesIO(b'a b'),    io.BytesIO,         'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    io.TextIOWrapper,   'r',    'a b'),
+    (io.BytesIO(b'a b'),    t.BinaryIO,         b'a b'),
+    (io.BytesIO(b'a b'),    t.TextIO,           'a b'),
+    (io.BytesIO(b'a b'),    t.IO[bytes],        b'a b'),
+    (io.BytesIO(b'a b'),    t.IO[str],          'a b'),
+    (io.BytesIO(b'a b'),    io.BufferedIOBase,  b'a b'),
+    (io.BytesIO(b'a b'),    io.TextIOBase,      'a b'),
+    (io.BytesIO(b'a b'),    io.BytesIO,         b'a b'),
+    (io.BytesIO(b'a b'),    io.TextIOWrapper,   'a b'),
 ))
-def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_mode, expected_result):
+def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_result):
     monkeypatch.setattr('sys.stdin', io.TextIOWrapper(value))
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
 
