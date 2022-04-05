@@ -1,11 +1,11 @@
-import asyncio
 import inspect
 from io import BytesIO, TextIOWrapper
-from typing import BinaryIO, List, Literal, Optional, TextIO, Tuple
+from typing import BinaryIO, List, Literal, Optional, TextIO, Tuple, Union
 
 import pytest
 
 from parsers import FunctionParameterParser, get_nargs
+
 
 
 @pytest.mark.parametrize(
@@ -30,8 +30,12 @@ from parsers import FunctionParameterParser, get_nargs
 ))
 def test_parser_typed(cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: str, two: int, three: bool = False, four: Optional[list] = None):
-        return one, two, three, four
+    def myfn(
+        one:    str,
+        two:    int,
+        three:  bool = False,
+        four:   Optional[list] = None
+    ): ...
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     parser = FunctionParameterParser(myfn)
@@ -118,8 +122,12 @@ def test_parser_implicit_stdin_str(stdin_arg, cmd_args, expected_result, monkeyp
 ))
 def test_parser_implicit_stdin_int(stdin_arg, cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: int, two: str, three: bool, four: list):
-        return one, two, three, four
+    def myfn(
+        one:    int,
+        two:    str,
+        three:  bool,
+        four:   list
+    ): ...
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
     monkeypatch.setattr('sys.stdin.read', stdin_arg.read)
@@ -144,7 +152,12 @@ def test_parser_implicit_stdin_int(stdin_arg, cmd_args, expected_result, monkeyp
 ))
 def test_parser_explicit_stdin(stdin_arg, cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: int, two: TextIO, three: bool, four: Optional[list] = None):
+    def myfn(
+        one:    int,
+        two:    TextIO,
+        three:  bool,
+        four:   Optional[list] = None
+    ):
         return one, two.read().rstrip(), three, four
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
@@ -158,13 +171,19 @@ def test_parser_explicit_stdin(stdin_arg, cmd_args, expected_result, monkeypatch
         with parser.parse_fn_args(cmd_args) as (args, kwargs):
             assert expected_result == myfn(*args, **kwargs)
 
+
 @pytest.mark.parametrize(
     'stdin_arg, cmd_args, expected_result', (
     (BytesIO(b'\x02\xc5\xd8'), ['1', 'true', 'a', 'b c', 'd'], (1, b'\x02\xc5\xd8', True, ['a', 'b c', 'd'])),
 ))
 def test_parser_explicit_stdin_binary(stdin_arg, cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: int, two: BinaryIO, three: bool, four: Optional[list] = None):
+    def myfn(
+        one:    int,
+        two:    BinaryIO,
+        three:  bool,
+        four:   Optional[list] = None
+    ):
         return one, two.read().rstrip(), three, four
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
@@ -191,8 +210,14 @@ def test_parser_explicit_stdin_binary(stdin_arg, cmd_args, expected_result, monk
 ))
 def test_parser_pos_kw_implicit_stdin_str(stdin_arg, cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: str, two: int, /, three: bool = False, *, four: Optional[list] = None):
-        return one, two, three, four
+    def myfn(
+        one:    str,
+        two:    int,
+        /,
+        three:  bool = False,
+        *,
+        four:   Optional[list] = None
+    ): ...
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
     monkeypatch.setattr('sys.stdin', TextIOWrapper(stdin_arg))
@@ -226,8 +251,12 @@ def test_parser_pos_kw_implicit_stdin_str(stdin_arg, cmd_args, expected_result, 
 ))
 def test_parser_nargs_list(cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: list, /, two: bool, three: Optional[List[int]]):
-        return one, two, three
+    def myfn(
+        one:    list,
+        /,
+        two:    bool,
+        three:  Optional[List[int]]
+    ): ...
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     parser = FunctionParameterParser(myfn)
@@ -238,7 +267,6 @@ def test_parser_nargs_list(cmd_args, expected_result, monkeypatch):
     else:
         with parser.parse_fn_args(cmd_args) as (args, kwargs):
             assert expected_result == (args, kwargs)
-
 
 
 @pytest.mark.parametrize(
@@ -261,8 +289,12 @@ def test_parser_nargs_list(cmd_args, expected_result, monkeypatch):
 ))
 def test_parser_nargs_tuple(cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: tuple[int, str], /, two: bool, three: Optional[Tuple[int, ...]]):
-        return one, two, three
+    def myfn(
+        one:    tuple[int, str],
+        /,
+        two:    bool,
+        three:  Optional[Tuple[int, ...]]
+    ): ...
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     parser = FunctionParameterParser(myfn)
@@ -275,7 +307,6 @@ def test_parser_nargs_tuple(cmd_args, expected_result, monkeypatch):
             assert expected_result == (args, kwargs)
 
 
-
 @pytest.mark.parametrize(
     'stdin_arg, cmd_args, expected_result', (
     ((TextIOWrapper(BytesIO(b'a b'))), ['test'],
@@ -284,7 +315,10 @@ def test_parser_nargs_tuple(cmd_args, expected_result, monkeypatch):
 ))
 def test_parser_nargs_stdin(stdin_arg, cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: str, two: List[TextIO]):
+    def myfn(
+        one:    str,
+        two:    List[TextIO]
+    ):
         data = []
         for f in two:
             for line in f:
@@ -307,8 +341,9 @@ def test_parser_nargs_stdin(stdin_arg, cmd_args, expected_result, monkeypatch):
 @pytest.mark.filterwarnings('error::pytest.PytestUnraisableExceptionWarning')
 def test_parser_close_open_files(monkeypatch):
 
-    def myfn(one: TextIO):
-        return one
+    def myfn(
+        one:    TextIO
+    ): ...
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     parser = FunctionParameterParser(myfn)
@@ -338,8 +373,11 @@ def test_parser_close_open_files(monkeypatch):
 ))
 def test_parser_literals(cmd_args, expected_result, monkeypatch):
 
-    def myfn(one: Literal['get', 'set', 'del'], /, two: Optional[Literal[0, 1, True, False]]):
-        return one, two
+    def myfn(
+        one:    Literal['get', 'set', 'del'],
+        /,
+        two:    Optional[Literal[0, 1, True, False]]
+    ): ...
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     parser = FunctionParameterParser(myfn)
@@ -374,8 +412,12 @@ def test_parser_literals(cmd_args, expected_result, monkeypatch):
 ))
 def test_parser_asyncio(cmd_args, expected_result, monkeypatch):
 
-    async def myfn(one: str, two: float, three: bool = False, four: Optional[list] = None):
-        return one, two, three, four
+    async def myfn(
+        one:    str,
+        two:    float,
+        three:  bool = False,
+        four:   Optional[list] = None
+    ): ...
 
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
     parser = FunctionParameterParser(myfn)
@@ -390,8 +432,14 @@ def test_parser_asyncio(cmd_args, expected_result, monkeypatch):
 
 def test_get_nargs():
 
-    def tuplefn(one: Tuple[int], two: tuple[int, int], three: tuple[int, ...], four: Tuple[int, ...], five: Tuple, six: tuple):
-        pass
+    def tuplefn(
+        one:    Tuple[int],
+        two:    tuple[int, int],
+        three:  tuple[int, ...],
+        four:   Tuple[int, ...],
+        five:   Tuple,
+        six:    tuple
+    ): ...
 
     params = inspect.signature(tuplefn).parameters
 
@@ -403,8 +451,12 @@ def test_get_nargs():
     assert get_nargs(params['six']) == '*'
 
 
-    def listfn(one: list, two: List, three: list[int], four: List[int]):
-        pass
+    def listfn(
+        one:    list,
+        two:    List,
+        three:  list[int],
+        four:   List[int]
+    ): ...
 
     params = inspect.signature(listfn).parameters
 
@@ -413,8 +465,12 @@ def test_get_nargs():
     assert get_nargs(params['three']) == '*'
     assert get_nargs(params['four']) == '*'
 
-    def unionfn(one: Union[List, Tuple], two: list | tuple, three: Union[Tuple[int], tuple[str]], four: tuple[int, ...] | Tuple[str, ...]):
-        pass
+    def unionfn(
+        one:    Union[List, Tuple],
+        two:    list | tuple,
+        three:  Union[Tuple[int], tuple[str]],
+        four:   tuple[int, ...] | Tuple[str, ...]
+    ): ...
 
     params = inspect.signature(unionfn).parameters
 

@@ -1,8 +1,6 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 
 
 # allow importing local packages

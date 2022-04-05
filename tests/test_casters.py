@@ -1,4 +1,3 @@
-import array as a
 import datetime as dt
 import decimal as d
 import enum
@@ -120,18 +119,18 @@ def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
 
 
 @pytest.mark.parametrize(
-    'value, typehint, expected_mode, expected_result', (
+    'value, typehint, expected_result', (
     # IO stream from stdin
-    (io.BytesIO(b'a b'),    t.BinaryIO,         'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    t.TextIO,           'r',    'a b'),
-    (io.BytesIO(b'a b'),    t.IO[bytes],        'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    t.IO[str],          'r',    'a b'),
-    (io.BytesIO(b'a b'),    io.BufferedIOBase,  'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    io.TextIOBase,      'r',    'a b'),
-    (io.BytesIO(b'a b'),    io.BytesIO,         'rb',    b'a b'),
-    (io.BytesIO(b'a b'),    io.TextIOWrapper,   'r',    'a b'),
+    (io.BytesIO(b'a b'),    t.BinaryIO,         b'a b'),
+    (io.BytesIO(b'a b'),    t.TextIO,           'a b'),
+    (io.BytesIO(b'a b'),    t.IO[bytes],        b'a b'),
+    (io.BytesIO(b'a b'),    t.IO[str],          'a b'),
+    (io.BytesIO(b'a b'),    io.BufferedIOBase,  b'a b'),
+    (io.BytesIO(b'a b'),    io.TextIOBase,      'a b'),
+    (io.BytesIO(b'a b'),    io.BytesIO,         b'a b'),
+    (io.BytesIO(b'a b'),    io.TextIOWrapper,   'a b'),
 ))
-def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_mode, expected_result):
+def test_cast_to_type_stdin(monkeypatch, value, typehint, expected_result):
     monkeypatch.setattr('sys.stdin', io.TextIOWrapper(value))
     monkeypatch.setattr('sys.stdin.isatty', lambda: False)
 
