@@ -276,22 +276,22 @@ def isbooleanaction(param: Parameter) -> bool:
 
 def get_nargs(param: Parameter) -> NumArgs:
     typehint = get_typehint(param)
-    if issubtype(typehint, (list, set)):
+    if not iscontainer(typehint):
+        return None
+    if not issubtype(typehint, tuple):
         return '*'
-    if issubtype(typehint, tuple):
-        member_types = None
-        types = [typehint]
-        while member_types is None:
-            _type = types.pop(0)
-            args = get_args(_type)
-            if get_origin(_type) is tuple:
-                member_types = args
-                break
-            types.extend(args)
-        if Ellipsis in member_types or len(member_types) == 0:
-            return '*'
-        return len(member_types)
-    return None
+    member_types = None
+    types = [typehint]
+    while member_types is None:
+        _type = types.pop(0)
+        args = get_args(_type)
+        if tuple in (_type, get_origin(_type)):
+            member_types = args
+            break
+        types.extend(args)
+    if Ellipsis in member_types or len(member_types) == 0:
+        return '*'
+    return len(member_types)
 
 
 def get_typehint(param: Parameter) -> Optional[TypeHint]:
@@ -299,4 +299,4 @@ def get_typehint(param: Parameter) -> Optional[TypeHint]:
         return param.annotation
     if param.default is not param.empty:
         return type(param.default)
-    return None#param.empty
+    return None

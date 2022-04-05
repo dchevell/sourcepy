@@ -1,11 +1,12 @@
 import asyncio
+import inspect
 from io import BytesIO, TextIOWrapper
 from typing import (Any, BinaryIO, DefaultDict, Dict, List, Literal, Optional,
                     Set, TextIO, Tuple, Union)
 
 import pytest
 
-from parsers import FunctionParameterParser
+from parsers import FunctionParameterParser, get_nargs
 
 
 
@@ -387,3 +388,39 @@ def test_parser_asyncio(cmd_args, expected_result, monkeypatch):
     else:
         with parser.parse_fn_args(cmd_args) as (args, kwargs):
             assert expected_result == (args, kwargs)
+
+
+def test_get_nargs():
+
+    def tuplefn(one: Tuple[int], two: tuple[int, int], three: tuple[int, ...], four: Tuple[int, ...], five: Tuple, six: tuple):
+        pass
+
+    params = inspect.signature(tuplefn).parameters
+
+    assert get_nargs(params['one']) == 1
+    assert get_nargs(params['two']) == 2
+    assert get_nargs(params['three']) == '*'
+    assert get_nargs(params['four']) == '*'
+    assert get_nargs(params['five']) == '*'
+    assert get_nargs(params['six']) == '*'
+
+
+    def listfn(one: list, two: List, three: list[int], four: List[int]):
+        pass
+
+    params = inspect.signature(listfn).parameters
+
+    assert get_nargs(params['one']) == '*'
+    assert get_nargs(params['two']) == '*'
+    assert get_nargs(params['three']) == '*'
+    assert get_nargs(params['four']) == '*'
+
+    def unionfn(one: Union[List, Tuple], two: list | tuple, three: Union[Tuple[int], tuple[str]], four: tuple[int, ...] | Tuple[str, ...]):
+        pass
+
+    params = inspect.signature(unionfn).parameters
+
+    assert get_nargs(params['one']) == '*'
+    assert get_nargs(params['two']) == '*'
+    assert get_nargs(params['three']) == 1
+    assert get_nargs(params['four']) == '*'
