@@ -1,4 +1,6 @@
+import array as a
 import datetime as dt
+import decimal as d
 import enum
 import io
 import pathlib as p
@@ -98,6 +100,10 @@ class Colour(enum.Enum):
     # TextIO stream from file
     ('/dev/null', t.TextIO, True, io.TextIOBase),
     ('/dev/null', t.BinaryIO, True, io.BufferedIOBase),
+
+    # Support single-arg types Sourcepy does not know about
+    ('1.1', d.Decimal, True, d.Decimal('1.1')),
+    ('/dev/null', p.Path, True, p.Path('/dev/null')),
 ))
 def test_cast_to_type(monkeypatch, value, typehint, strict, expected_result):
     monkeypatch.setattr('sys.stdin.isatty', lambda: True)
