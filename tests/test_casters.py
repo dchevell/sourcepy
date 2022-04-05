@@ -1,10 +1,10 @@
-import collections.abc as abc
 import datetime as dt
 import enum
 import io
 import pathlib as p
 import re
 import typing as t
+from collections import abc
 
 import pytest
 

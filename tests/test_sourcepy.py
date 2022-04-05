@@ -1,5 +1,4 @@
 import os
-import pty
 import shlex
 import subprocess
 
@@ -172,6 +171,6 @@ def run_from_shell(example_script, test_command):
         '
     """
     _, child_fd = os.openpty()
-    p = subprocess.Popen(shlex.split(command), stdin=child_fd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = p.communicate()
+    with subprocess.Popen(shlex.split(command), stdin=child_fd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as p:
+        out, err = p.communicate()
     return out.decode().strip(), err.decode().strip()

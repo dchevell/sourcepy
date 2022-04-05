@@ -1,13 +1,11 @@
 import asyncio
 import inspect
 from io import BytesIO, TextIOWrapper
-from typing import (Any, BinaryIO, DefaultDict, Dict, List, Literal, Optional,
-                    Set, TextIO, Tuple, Union)
+from typing import BinaryIO, List, Literal, Optional, TextIO, Tuple
 
 import pytest
 
 from parsers import FunctionParameterParser, get_nargs
-
 
 
 @pytest.mark.parametrize(
