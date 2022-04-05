@@ -73,6 +73,7 @@ def test_variables():
 
 def test_help():
     example_script = 'demo.py'
+
     test_command = 'multiply --help'
     out, err = run_from_shell(example_script, test_command)
     assert "usage: multiply [-h] [-x int] [-y int]" in err
@@ -88,7 +89,15 @@ def test_help():
     assert "{'sit', 'speak', 'drop'} (default: None)" in err
     assert len(out) == 0
 
+    test_command = 'favouritecolour --help'
+    out, err = run_from_shell(example_script, test_command)
+    assert "usage: favouritecolour [-h] [-c {'RED', 'GREEN', 'BLUE'}]" in err
+    assert "colour (-c, --colour)" in err
+    assert "{'RED', 'GREEN', 'BLUE'} (required)" in err
+    assert len(out) == 0
+
     example_script = 'pygrep.py'
+
     test_command = 'pygrep --help'
     out, err = run_from_shell(example_script, test_command)
     assert "usage: pygrep [-h] [-p Pattern] [-g [file/stdin ...]]" in err
@@ -98,6 +107,7 @@ def test_help():
 
 def test_errors():
     example_script = 'demo.py'
+
     test_command = 'multiply a b'
     out, err = run_from_shell(example_script, test_command)
     assert "multiply: error: argument x: invalid int value: 'a'" in err
@@ -108,7 +118,13 @@ def test_errors():
     assert "pretzel.do: error: argument action: invalid choice: 'fly' (choose from 'sit', 'speak', 'drop')" in err
     assert len(out) == 0
 
+    test_command = 'favouritecolour -c YELLOW'
+    out, err = run_from_shell(example_script, test_command)
+    assert "favouritecolour: error: argument colour: invalid choice: 'YELLOW' (choose from 'RED', 'GREEN', 'BLUE')" in err
+    assert len(out) == 0
+
     example_script = 'pygrep.py'
+
     test_command = 'pygrep "test" thisfiledoesnotexist'
     out, err = run_from_shell(example_script, test_command)
     assert "pygrep: error: argument grepdata: no such file or directory: thisfiledoesnotexist" in err
