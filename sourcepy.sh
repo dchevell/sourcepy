@@ -1,6 +1,12 @@
-# Set this to true to allow using the builtin source command to source Python files as
-# well as regular shell scripts. This is pretty cool so I'd recommend turning it on!
+# Set this to true to allow using the builtin source command to source
+# Python files as well as regular shell scripts. This is pretty cool so
+# I'd recommend leaving it on!
 : ${SOURCEPY_OVERLOAD_SOURCE:=true}
+
+# Sourcepy should automatically the `src` directory where Sourcepy's run
+# scripts are located. If this isn't working, e.g. for shells other than
+# bash or zsh, you can manually set this value in your environment.
+: ${SOURCEPY_BIN:="$(dirname ${BASH_SOURCE[0]:-${(%):-%x}})/src"}
 
 
 sourcepy() {
@@ -27,28 +33,4 @@ then
     alias .=source
 fi
 
-currentshell() {
-    local shell=$(ps -o comm= -p $$ 2> /dev/null)
-    if [[ -n $shell ]]
-    then
-        echo ${shell//-/} | sed 's:.*/::'
-        return
-    fi
-    if [[ -n $ZSH_VERSION ]]
-    then
-        echo "zsh"
-    elif [[ -n $BASH_VERSION ]]
-    then
-        echo "bash"
-    fi
-}
 
-
-# to install `realpath` on  mac: `brew install coreutils`:
-if [[ $(currentshell) == "zsh" ]]
-then
-    SOURCEPY_BIN="$(realpath $(dirname $0))/src"
-elif [[ $(currentshell) == "bash" ]]
-then
-    SOURCEPY_BIN="$(realpath $(dirname $BASH_SOURCE))/src"
-fi
