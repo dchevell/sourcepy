@@ -2,11 +2,6 @@
 # well as regular shell scripts. This is pretty cool so I'd recommend turning it on!
 : ${SOURCEPY_OVERLOAD_SOURCE:=true}
 
-# Allow this tool to auto update itself from the github repo. Whilst this option is here
-# if you want it, the securityconscious should consider whether they really want to allow
-# strangers to run arbitrary code without on their systems without vetting it first.
-: ${SOURCEPY_AUTO_UPDATE:=false} # todo - does nothing right now
-
 
 sourcepy() {
     local python_bin=${PYTHON_BIN:-$(which python3)}
@@ -48,6 +43,8 @@ currentshell() {
     fi
 }
 
+
+# to install `realpath` on  mac: `brew install coreutils`:
 if [[ $(currentshell) == "zsh" ]]
 then
     SOURCEPY_BIN="$(realpath $(dirname $0))/src"
