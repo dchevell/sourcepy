@@ -4,10 +4,10 @@ import inspect
 import sys
 from argparse import Action
 from argparse import _ArgumentGroup as ArgumentGroup
-from collections.abc import Callable, ValuesView
 from inspect import Parameter
-from typing import (Any, Dict, Iterator, List, Literal, Optional, Tuple, Type,
-                    TypedDict, Union, get_args, get_origin)
+from typing import (Any, Callable, Dict, Iterator, List, Literal, Optional,
+                    Tuple, Type, TypedDict, Union, ValuesView, get_args,
+                    get_origin)
 
 from casters import (CastingError, TypeHint, cast_to_type, containsio,
                      get_typehint_name, iscontainer, issubtype)
