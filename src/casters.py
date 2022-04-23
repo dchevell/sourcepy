@@ -2,14 +2,13 @@ import inspect
 import json
 import re
 import sys
-from collections.abc import Callable, Collection
 from datetime import date, datetime, time
 from enum import Enum
 from io import IOBase, TextIOBase
 from pathlib import Path
-from re import Pattern
-from typing import (IO, Any, Dict, List, Literal, Optional, Sequence, Set,
-                    TextIO, Tuple, Type, TypeVar, Union)
+from typing import (IO, Any, Callable, Collection, Dict, List, Literal,
+                    Optional, Pattern, Sequence, Set, TextIO, Tuple, Type,
+                    TypeVar, Union)
 from typing import _Final as TypingBase  # type: ignore[attr-defined]
 from typing import get_args, get_origin
 

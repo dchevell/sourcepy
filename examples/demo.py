@@ -65,12 +65,10 @@ class Colour(Enum):
     BLUE = 'blue'
 
 def favouritecolour(colour: Colour) -> str:
-    match colour:
-        case Colour.RED:
-            return "I like the colour red"
-        case Colour.GREEN:
-            return "Green is my favourite colour"
-        case Colour.BLUE:
-            return "I prefer the colour blue"
-        case _:
-            raise ValueError("I see too many colours")
+    if colour is Colour.RED:
+        return "I like the colour red"
+    if colour is Colour.GREEN:
+        return "Green is my favourite colour"
+    if colour is Colour.BLUE:
+        return "I prefer the colour blue"
+    raise ValueError("I see too many colours")
